@@ -6,8 +6,8 @@
 
 enum SolveResult : char
 {
-	CURRENT_PLAYER_WIN	= 1,
-	DRAW				= 0,
+	CURRENT_PLAYER_WIN	=  1,
+	DRAW				=  0,
 	OTHER_PLAYER_WIN	= -1,
 	INVALID_BOARD		= -2,
 };
@@ -23,3 +23,7 @@ inline SolveResult operator-(const SolveResult& other)
 // The tree uses alpha-beta pruning and its depth moves deep
 
 SolveResult solveBoard(const Board& initialBoard, unsigned char depth);
+
+// Calls the function clear on the transposition table
+
+void clearTranspositionTable();

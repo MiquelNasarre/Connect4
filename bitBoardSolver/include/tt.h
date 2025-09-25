@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <stdlib.h>
+#include <cstring>
 
 /* TRANSPOSITION TABLE HEADER FILE 
 -------------------------------------------------------------------------------------------------------
@@ -18,13 +19,14 @@ Macros for TTs
 -------------------------------------------------------------------------------------------------------
 */
 
-// Enables Transposition Tables in the tree generation 
-// (Enabled upon including this file)
-#define usingTT
+// The gardener is a bunch of logical tests to better evaluate a position without branching
+// only efficient when dealing with big trees
 
-// Tells solviong funtions to clear TT after every use 
-// (Comment here to disable)
-#define clearTT
+//#define GARDENER
+
+// Depth testing is for when you have multiple trees sharing TT at different depths
+
+//#define DEPTH_TESTING
 
 // Constants useful for defining values relevant to the transposition tables
 // You can modify them here or call the functions with a set value
@@ -106,7 +108,10 @@ struct TTEntry {
     uint8_t  depth;         // remaining depth stored
     int8_t   score;         // -1,0,+1 from current side POV
     uint8_t  flag;          // 0=EXACT, 1=LOWER, 2=UPPER
-    uint8_t  bestCol = 255; // If existing stores the best move (if not =255)
+    uint8_t  bestCol;       // If existing stores the best move (if not =255)
+#ifdef GARDENER
+    uint8_t  forcePlay;     // If (1) best column is forced
+#endif
     // pad 3 bytes
 };
 
@@ -122,19 +127,21 @@ struct TransTable {
 
     inline void init(size_t pow2_entries = TT_SIZE)
     {
+        if (entries)
+            free(entries);
+
         entries = (TTEntry*)calloc(sizeof(TTEntry), pow2_entries);
         mask = (uint32_t)(pow2_entries - 1);
     }
 
-    // This function erases the memory of the transposition table
+    // This function sets to zero the entire transposition table
 
     inline void clear()
     {
         if (!entries)
             return;
 
-        free(entries);
-        entries = nullptr;
+        memset(entries, 0U, sizeof(TTEntry) * (mask + 1));
     }
 
     // Checks to  see if the board position is stored in the table
@@ -168,11 +175,22 @@ struct TransTable {
 
     // This function receives a TTentry and stores it inside te transmutation table
 
-    inline void store(uint64_t key, uint8_t depth, int8_t score, uint8_t flag, uint8_t bestCol = 255u) const
+    inline void store(uint64_t key, uint8_t depth, int8_t score, uint8_t flag, uint8_t bestCol = 255u 
+#ifdef GARDENER 
+        , uint8_t forcePlay = 0u 
+#endif
+    ) const
     {
         TTEntry* e = probe(key);
-        if (e->key != key || depth >= e->depth)
-            *e = TTEntry{ key, depth, score, flag, bestCol };
+        
+#ifdef DEPTH_TESTING
+        if (depth >= e->depth /* || e->key != key*/)
+#endif
+            *e = TTEntry{ key, depth, score, flag, bestCol 
+#ifdef GARDENER 
+                , forcePlay
+#endif
+        };
     }
 };
 

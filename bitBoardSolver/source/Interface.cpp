@@ -94,6 +94,7 @@ void printBoard(const Connect4Board& board)
 
 Player solveConnect4(const Connect4Board& board, unsigned char depth)
 {
+	clearTranspositionTable();
 	Board* bitBoard = translateBoard(board);
 	SolveResult result = solveBoard(*bitBoard, depth);
 	delete bitBoard;
