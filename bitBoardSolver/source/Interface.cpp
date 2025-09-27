@@ -1,13 +1,10 @@
 #include "Interface.h"
 #include "bitSolver.h"
+#include "heuristicSolver.h"
 #include "Timer.h"
 
+#include <stdlib.h>
 #include <cstdio>
-
-// Preferred move order for better pruning
-
-constexpr unsigned char moveOrder[8] = { 3,4,2,5,1,6,0,7 };
-
 
 static inline Connect4Board* decodeBoard(const Board& bitBoard)
 {
@@ -29,6 +26,9 @@ static inline Connect4Board* decodeBoard(const Board& bitBoard)
 
 static inline Board* translateBoard(const Connect4Board& board)
 {
+	if (!Z_PIECE[0][0])
+		init_zobrist();
+
 	Board* bitBoard = new Board();
 	for (unsigned char col = 0; col < 8; col++)
 	{
@@ -37,18 +37,16 @@ static inline Board* translateBoard(const Connect4Board& board)
 			if (board.board[row][col] == RED)
 			{
 				bitBoard->playerBitboard[0] |= bit_at(col, row);
-#ifdef usingTT
 				bitBoard->hash ^= Z_PIECE[0][8 * col + row];
-#endif
+
 				bitBoard->heights[col]++;
 				bitBoard->moveCount++;
 			}
 			else if (board.board[row][col] == YELLOW)
 			{
 				bitBoard->playerBitboard[1] |= bit_at(col, row);
-#ifdef usingTT
 				bitBoard->hash ^= Z_PIECE[1][8 * col + row];
-#endif
+
 				bitBoard->heights[col]++;
 				bitBoard->moveCount++;
 			}
@@ -65,38 +63,100 @@ Connect4Board::Connect4Board(const unsigned char T[8][8])
 			board[row][col] = (Player)T[7 - row][col];
 }
 
-void printBoard(const Connect4Board& board)
+void fancyPrintBoard(const Connect4Board& board)
 {
-	printf("\n");
-	for (int row = 0; row < 8; row++)
+	constexpr int N = 8;
+	char** T = (char**)calloc(N, sizeof(void*));
+	for (unsigned char i = 0; i < N; i++)
 	{
-		for (int col = 0; col < 8; col++)
-		{
-			char cell;
-			switch (board.board[7 - row][col])
-			{
-			case RED:
-				cell = 'R';
-				break;
-			case YELLOW:
-				cell = 'Y';
-				break;
-			default:
-				cell = ' ';
-				break;
-			}
-			printf("|%c", cell);
-		}
-		printf("|\n");
+		T[i] = (char*)calloc(N, sizeof(char));
+		for (unsigned char j = 0; j < N; j++)
+			T[i][j] = (char)board.board[7 - i][j];
 	}
-	printf("\n");
+
+	for (int f = 0; f < N - 3; f++) {
+		for (int c = 0; c < N; c++) {
+			if (T[f][c] != 0 && T[f][c] == T[f + 1][c] && T[f][c] == T[f + 2][c] && T[f][c] == T[f + 3][c]) { T[f][c] = T[f][c] + 10; T[f + 1][c] = T[f + 1][c] + 10; T[f + 2][c] = T[f + 2][c] + 10; T[f + 3][c] = T[f + 3][c] + 10; }
+		}
+	}
+	for (int f = 0; f < N; f++) {
+		for (int c = 0; c < N - 3; c++) {
+			if (T[f][c] != 0 && T[f][c] == T[f][c + 1] && T[f][c] == T[f][c + 2] && T[f][c] == T[f][c + 3]) { T[f][c] = T[f][c] + 10; T[f][c + 1] = T[f][c + 1] + 10; T[f][c + 2] = T[f][c + 2] + 10; T[f][c + 3] = T[f][c + 3] + 10; }
+		}
+	}
+	for (int f = 0; f < N - 3; f++) {
+		for (int c = 0; c < N - 3; c++) {
+			if (T[f][c] != 0 && T[f][c] == T[f + 1][c + 1] && T[f][c] == T[f + 2][c + 2] && T[f][c] == T[f + 3][c + 3]) { T[f][c] = T[f][c] + 10; T[f + 1][c + 1] = T[f + 1][c + 1] + 10; T[f + 2][c + 2] = T[f + 2][c + 2] + 10; T[f + 3][c + 3] = T[f + 3][c + 3] + 10; }
+		}
+	}
+	for (int f = 3; f < N; f++) {
+		for (int c = 0; c < N - 3; c++) {
+			if (T[f][c] != 0 && T[f][c] == T[f - 1][c + 1] && T[f][c] == T[f - 2][c + 2] && T[f][c] == T[f - 3][c + 3]) { T[f][c] = T[f][c] + 10; T[f - 1][c + 1] = T[f - 1][c + 1] + 10; T[f - 2][c + 2] = T[f - 2][c + 2] + 10; T[f - 3][c + 3] = T[f - 3][c + 3] + 10; }
+		}
+	}
+	system("color");
+	printf("\033[0;34m");
+	for (int i = 0; i < N; i++) {
+		if (!i)printf("\n\n  %c", 201);
+		printf("%c%c%c", 205, 205, 205);
+		if (i != N - 1)printf("%c", 203);
+		else printf("%c", 187);
+	}
+
+	for (int i = 0; i < N; i++) {
+		printf("\n  ");
+		printf("%c", 186);
+		for (int j = 0; j < N; j++) {
+			if (!T[i][j])printf("   ");
+			else {
+				if (T[i][j] > 10) {
+					T[i][j] = T[i][j] % 10;
+					if (T[i][j] == 1)printf("\033[1;31m");
+					else if (T[i][j] == 2)printf("\033[1;33m");
+					else if (T[i][j] == 3)printf("\033[1;36m");
+					else if (T[i][j] == 4)printf("\033[1;32m");
+					else if (T[i][j] == 5)printf("\033[1;35m");
+					else if (T[i][j] == 6)printf("\033[1;37m");
+				}
+				else if (T[i][j] == 1)printf("\033[0;31m");
+				else if (T[i][j] == 2)printf("\033[0;33m");
+				else if (T[i][j] == 3)printf("\033[0;36m");
+				else if (T[i][j] == 4)printf("\033[0;32m");
+				else if (T[i][j] == 5)printf("\033[0;35m");
+				else if (T[i][j] == 6)printf("\033[0;37m");
+				printf("%c%c%c", 219, 219, 219);
+				printf("\033[0;34m");
+			}
+			printf("%c", 186);
+		}
+		printf("\n  ");
+		if (i != N - 1) {
+			for (int k = 0; k < N; k++) {
+				if (!k)printf("%c", 204);
+				printf("%c%c%c", 205, 205, 205);
+				if (k != N - 1)printf("%c", 206);
+				else printf("%c", 185);
+			}
+		}
+		else {
+			for (int k = 0; k < N; k++) {
+				if (!k)printf("%c", 200);
+				printf("%c%c%c", 205, 205, 205);
+				if (k != N - 1)printf("%c", 202);
+				else printf("%c\n ", 188);
+			}
+		}
+	}
+	printf("\033[1;30m");
+	for (int i = 0; i < N; i++)printf("   %i", i + 1);
+	printf("\n\n");
+	printf("\033[0m");
 }
 
 Player solveConnect4(const Connect4Board& board, unsigned char depth)
 {
-	clearTranspositionTable();
 	Board* bitBoard = translateBoard(board);
-	SolveResult result = solveBoard(*bitBoard, depth);
+	SolveResult result = solveBoard(*bitBoard, depth, true);
 	delete bitBoard;
 	switch (result)
 	{
@@ -111,95 +171,85 @@ Player solveConnect4(const Connect4Board& board, unsigned char depth)
 	}
 }
 
-Eval decideNextMove(const Connect4Board& board, unsigned char depth)
-{
-	Board bitBoard = *translateBoard(board);
-
-	Eval eval;
-
-	eval.column = 8;
-
-	SolveResult best = OTHER_PLAYER_WIN;
-
-	for (unsigned char column : moveOrder)
-		if (canPlay(bitBoard, column))
-		{
-			playMove(bitBoard, column);
-			SolveResult result = (SolveResult)-solveBoard(bitBoard, depth);
-			undoMove(bitBoard, column);
-
-			if (result > best)
-			{
-				best = result;
-				eval.column = column;
-			}
-		}
-
-	if (eval.column == 8)
-		for (unsigned char column : moveOrder)
-			if (canPlay(bitBoard, column))
-			{
-				eval.column = column;
-				break;
-			}
-
-	switch (best)
-	{
-	case CURRENT_PLAYER_WIN:
-		eval.winner = board.currentPlayer;
-		break;
-	case OTHER_PLAYER_WIN:
-		eval.winner = (board.currentPlayer == RED) ? YELLOW : RED;
-		break;
-	case DRAW:
-		eval.winner = NONE;
-		break;
-	default:
-		eval.winner = INVALID;
-		break;
-	}
-	return eval;
-}
-
-void playAgainstMachine(const Connect4Board board, const Player YourPlayer, const unsigned char depth)
+void playAgainstMachine(const Connect4Board board, const Player YourPlayer, unsigned char depth, unsigned char bitDepth, bool increase_depth)
 {
 	Timer timer;
 
-	printf("Initial Board:\n");
+	char you = YourPlayer;
+
+	printf("Initial Board:\n\n\n\n");
 	
-	printBoard(board);
+	fancyPrintBoard(board);
 
 	Board bitBoard = *translateBoard(board);
 
 	while (!is_win(bitBoard.playerBitboard[0]) && !is_win(bitBoard.playerBitboard[1]) && bitBoard.moveCount < 64)
 	{
-		if (YourPlayer - 1 == bitBoard.sideToPlay)
+		if (you - 1 == bitBoard.sideToPlay)
 		{
 			unsigned char column;
 			printf("\nChoose a column:  ");
 			scanf("%hhu", &column);
-			if (column >= 8 || !canPlay(bitBoard, column))
+			if (column == 9)
+			{
+				you = 3 - you;
+				continue;
+			}
+			if (!column || column > 8 || !canPlay(bitBoard, column - 1))
 			{
 				printf("Invalid column!!");
 				continue;
 			}
-			playMove(bitBoard, column);
+			playMove(bitBoard, column - 1);
 
-			printBoard(*decodeBoard(bitBoard));
+			system("cls");
+
+			printf("You have played at column %u\n\n\n\n", column);
 		}
 		else
 		{
 			timer.reset();
-			Eval eval = decideNextMove(*decodeBoard(bitBoard), depth);
+			SolveEval eval = evaluateBoard(bitBoard, depth, bitDepth);
 			float time = timer.check();
+
+			system("cls");
 			
-			printf("\nThe code has chosen column %u after thinking for %.3fs and evaluates the position as %s", eval.column, time,
-				eval.winner == RED ? "winning for RED\n" : ((eval.winner == YELLOW) ? "winning for YELLOW\n" : "a draw\n"));
+			printf("The code has chosen column %u after thinking for %.3fs \nIt evaluates the position as ", eval.column + 1, time);
+			
+			switch (eval.flag)
+			{
+			case CURRENT_PLAYER_WIN:
+				printf("winning for %s.", you == RED ? "YELLOW" : "RED");
+				break;
+			case OTHER_PLAYER_WIN:
+				printf("winning for %s.", you == RED ? "RED" : "YELLOW");
+				break;
+			case CURRENT_PLAYER_BETTER:
+				printf("better for %s.", you == RED ? "YELLOW" : "RED");
+				break;
+			case OTHER_PLAYER_BETTER:
+				printf("better for %s.", you == RED ? "RED" : "YELLOW");
+				break;
+			case DRAW:
+				printf("a draw. Value: %.3f", eval.eval);
+				break;
+			}
+
+			printf("\nValue: %.3f \n", eval.eval);
+
+			if (eval.eval == 1.f || eval.eval == -1.f)
+				printf("Distance to mate: %hhu\n", eval.depth - 1);
+			else if (depth + bitDepth + bitBoard.moveCount >= 64 || eval.depth == 255)
+				printf("Depth: Until the end of the game\n");
+			else
+				printf("Depth: %hhu + %hhu = %hhu\n", eval.depth, bitDepth, eval.depth + bitDepth);
 			
 			playMove(bitBoard, eval.column);
 
-			printBoard(*decodeBoard(bitBoard));
 		}
+
+		fancyPrintBoard(*decodeBoard(bitBoard));
+
 	}
 
 	if (is_win(bitBoard.playerBitboard[0]))
@@ -210,4 +260,70 @@ void playAgainstMachine(const Connect4Board board, const Player YourPlayer, cons
 
 	else
 		printf("\nThe game has ended in a draw\n");
+}
+
+void MachineAgainstMachine(const Connect4Board board, float Max_time, unsigned char bitDepth, bool clear_screen)
+{
+	Timer timer;
+
+	printf("Initial Board:\n\n\n\n");
+
+	fancyPrintBoard(board);
+
+	Board bitBoard = *translateBoard(board);
+
+	while (!is_win(bitBoard.playerBitboard[0]) && !is_win(bitBoard.playerBitboard[1]) && bitBoard.moveCount < 64)
+	{
+
+		timer.reset();
+		SolveEval eval = evaluateBoardTime(bitBoard, Max_time, bitDepth);
+		float time = timer.check();
+
+		if(clear_screen)
+			system("cls");
+
+		printf("The code has chosen column %u after thinking for %.3fs \nIt evaluates the position as ", eval.column + 1, time);
+
+		switch (eval.flag)
+		{
+		case CURRENT_PLAYER_WIN:
+			printf("winning for %s.", bitBoard.sideToPlay ? "YELLOW" : "RED");
+			break;
+		case OTHER_PLAYER_WIN:
+			printf("winning for %s.", bitBoard.sideToPlay ? "RED" : "YELLOW");
+			break;
+		case CURRENT_PLAYER_BETTER:
+			printf("better for %s.", bitBoard.sideToPlay ? "YELLOW" : "RED");
+			break;
+		case OTHER_PLAYER_BETTER:
+			printf("better for %s.", bitBoard.sideToPlay ? "RED" : "YELLOW");
+			break;
+		case DRAW:
+			printf("a draw. Value: %.3f", eval.eval);
+			break;
+		}
+
+		printf("\nValue: %.3f \n", eval.eval);
+
+		if (eval.eval == 1.f || eval.eval == -1.f)
+			printf("Distance to mate: %hhu\n", eval.depth - 1);
+		else if (eval.depth == 255)
+			printf("Depth: Until the end of the game\n");
+		else
+			printf("Depth: %hhu + %hhu = %hhu\n", eval.depth, bitDepth, eval.depth + bitDepth);
+
+		playMove(bitBoard, eval.column);
+
+		fancyPrintBoard(*decodeBoard(bitBoard));
+
+	}
+}
+
+float evaluatePosition(const Connect4Board& board, unsigned char depth, unsigned char bitDepth)
+{
+	Board* bitBoard = translateBoard(board);
+	float result = evaluateBoard(*bitBoard, depth, bitDepth).eval;
+	delete bitBoard;
+
+	return result;
 }

@@ -7,7 +7,7 @@ enum Player : unsigned char
 	NONE = 0,
 	RED = 1,
 	YELLOW = 2,
-	INVALID = 3
+	INVALID = 3,
 };
 
 struct Connect4Board
@@ -20,16 +20,12 @@ struct Connect4Board
 	Connect4Board() = default;
 };
 
-typedef struct eval
-{
-	unsigned char column;
-	Player winner;
-} Eval;
+extern Player solveConnect4(const Connect4Board& board, unsigned char depth);
 
-Player solveConnect4(const Connect4Board& board, unsigned char depth);
+extern void fancyPrintBoard(const Connect4Board& board);
 
-Eval decideNextMove(const Connect4Board& board, unsigned char depth);
+extern void playAgainstMachine(const Connect4Board board, const Player YourPlayer, unsigned char depth, unsigned char bitDepth, bool increase_depth);
 
-void printBoard(const Connect4Board& board);
+extern void MachineAgainstMachine(const Connect4Board board, float Max_time, unsigned char bitDepth, bool clear_screen = true);
 
-void playAgainstMachine(const Connect4Board board, const Player YourPlayer, const unsigned char depth);
+extern float evaluatePosition(const Connect4Board& board, unsigned char depth, unsigned char bitDepth);

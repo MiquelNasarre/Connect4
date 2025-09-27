@@ -20,18 +20,22 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\bitSolver.cpp" />
+    <ClCompile Include="source\heuristicSolver.cpp" />
     <ClCompile Include="source\Interface.cpp" />
     <ClCompile Include="source\main.cpp" />
     <ClCompile Include="source\Timer.cpp" />
-    <ClCompile Include="source\tt.cpp" />
+    <ClCompile Include="source\zobrist.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\bitBoard.h" />
     <ClInclude Include="include\bitSolver.h" />
+    <ClInclude Include="include\heuristicSolver.h" />
+    <ClInclude Include="include\heuristictt.h" />
     <ClInclude Include="include\Interface.h" />
     <ClInclude Include="include\testBoards.h" />
     <ClInclude Include="include\Timer.h" />
     <ClInclude Include="include\tt.h" />
+    <ClInclude Include="include\zobrist.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

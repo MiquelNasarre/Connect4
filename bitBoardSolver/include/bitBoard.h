@@ -1,11 +1,31 @@
 #pragma once
-#include "tt.h"
+#include "zobrist.h"
 
 /*
 -------------------------------------------------------------------------------------------------------
 Definition of the board object that will be used for solving connect4
 -------------------------------------------------------------------------------------------------------
 */
+
+// Possible results of the solver
+// The set values are important to simplify minimax algorithm
+
+enum SolveResult : char
+{
+	CURRENT_PLAYER_WIN = 1,
+	DRAW = 0,
+	OTHER_PLAYER_WIN = -1,
+	INVALID_BOARD = -2,
+	CURRENT_PLAYER_BETTER = 2,
+	OTHER_PLAYER_BETTER = 3,
+};
+
+// Simple operator to avoid stuffing the code with type casts
+
+inline SolveResult operator-(const SolveResult& other)
+{
+	return (SolveResult)-(char)other;
+}
 
 // In this representation, the board is a 8x8 grid (64 cells)
 // the map bit index is calculated as: index = column * 8 + row
@@ -86,6 +106,41 @@ static inline uint64_t bit_at(const unsigned char column, const unsigned char ro
 In game functions for board operations
 -------------------------------------------------------------------------------------------------------
 */
+
+// Checks if the board is valid
+// By checking if there are any floating pieces
+// and if the move count matches the pieces on the board
+
+static inline bool invalidBoard(const Board& board)
+{
+	unsigned char moveCount = 0;
+
+	if (board.playerBitboard[0] & board.playerBitboard[1])
+		return true;
+
+	if (board.hash != boardHash(board.playerBitboard))
+		return true;
+
+	uint64_t boardMask = mask(board);
+	for (unsigned char column = 0; column < 8; column++)
+	{
+		const uint8_t height = board.heights[column];
+
+		if (height > 8)
+			return true;
+
+		moveCount += height;
+
+		uint64_t expected = ((1ULL << height) - 1) << (8 * column);
+		if ((boardMask & COL_MASK(column)) != expected)
+			return true;
+	}
+
+	if (moveCount != board.moveCount)
+		return true;
+
+	return false;
+}
 
 // Place a stone for side-to-move in column c (assumes can_play was true)
 // Updates board hash and switches player at the end of the move

@@ -12,42 +12,60 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
+    <Filter Include="Sources\Private\interface">
+      <UniqueIdentifier>{a47b87a5-7d2f-4cb3-b8be-a0ea3e864df0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sources\Public\interface">
+      <UniqueIdentifier>{8c9227d2-f604-41d7-a8f5-4536a4d26af8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="source\main.cpp">
-      <Filter>Sources\Private</Filter>
-    </ClCompile>
-    <ClCompile Include="source\Timer.cpp">
+    <ClCompile Include="source\heuristicSolver.cpp">
       <Filter>Sources\Private</Filter>
     </ClCompile>
     <ClCompile Include="source\bitSolver.cpp">
       <Filter>Sources\Private</Filter>
     </ClCompile>
-    <ClCompile Include="source\Interface.cpp">
+    <ClCompile Include="source\zobrist.cpp">
       <Filter>Sources\Private</Filter>
     </ClCompile>
-    <ClCompile Include="source\tt.cpp">
-      <Filter>Sources\Private</Filter>
+    <ClCompile Include="source\Interface.cpp">
+      <Filter>Sources\Private\interface</Filter>
+    </ClCompile>
+    <ClCompile Include="source\main.cpp">
+      <Filter>Sources\Private\interface</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Timer.cpp">
+      <Filter>Sources\Private\interface</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\Timer.h">
-      <Filter>Sources\Public</Filter>
-    </ClInclude>
     <ClInclude Include="include\bitBoard.h">
       <Filter>Sources\Public</Filter>
     </ClInclude>
     <ClInclude Include="include\bitSolver.h">
       <Filter>Sources\Public</Filter>
     </ClInclude>
-    <ClInclude Include="include\Interface.h">
-      <Filter>Sources\Public</Filter>
-    </ClInclude>
     <ClInclude Include="include\tt.h">
       <Filter>Sources\Public</Filter>
     </ClInclude>
-    <ClInclude Include="include\testBoards.h">
+    <ClInclude Include="include\heuristicSolver.h">
       <Filter>Sources\Public</Filter>
+    </ClInclude>
+    <ClInclude Include="include\heuristictt.h">
+      <Filter>Sources\Public</Filter>
+    </ClInclude>
+    <ClInclude Include="include\zobrist.h">
+      <Filter>Sources\Public</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Interface.h">
+      <Filter>Sources\Public\interface</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Timer.h">
+      <Filter>Sources\Public\interface</Filter>
+    </ClInclude>
+    <ClInclude Include="include\testBoards.h">
+      <Filter>Sources\Public\interface</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

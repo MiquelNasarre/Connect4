@@ -1,29 +1,23 @@
 #pragma once
 #include "bitBoard.h"
 
-// Possible results of the solver
-// The set values are important to simplify minimax algorithm
-
-enum SolveResult : char
-{
-	CURRENT_PLAYER_WIN	=  1,
-	DRAW				=  0,
-	OTHER_PLAYER_WIN	= -1,
-	INVALID_BOARD		= -2,
-};
-
-// Simple operator to avoid stuffing the code with type casts
-
-inline SolveResult operator-(const SolveResult& other)
-{
-	return (SolveResult)-(char)other;
-}
-
 // Returns the score of the board found after generating a tree
 // The tree uses alpha-beta pruning and its depth moves deep
 
-SolveResult solveBoard(const Board& initialBoard, unsigned char depth);
+extern SolveResult solveBoard(const Board& initialBoard, unsigned char depth, bool clearTT = false);
 
-// Calls the function clear on the transposition table
+// Same as the previous one but assumes validity checks have been done
 
-void clearTranspositionTable();
+extern SolveResult noChecksSolveBoard(const Board& initialBoard, unsigned char depth);
+
+// If the position is stored on the transposition table it retrieves the best column
+// if the position is a mate situation it does not guarantee best path
+
+extern unsigned char retrieveColumn(const Board& board);
+
+// If there is a forced win by any of the players it will find the best move
+// For the winning player is the one that wins the fastest
+// For the losing player is the one that delays the loss the longest
+// First value is the column second value is the distance
+
+extern unsigned char* findBestPath(const Board& board);

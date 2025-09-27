@@ -1,10 +1,8 @@
-#include "tt.h"
+#include "zobrist.h"
 
-// extern Definitions for tt.h
+// extern Definitions for zobrist.h
 
 uint64_t Z_PIECE[2][64] = { 0ULL };
-
-TransTable TT;
 
 // Nice simple function to mixup some numbers
 

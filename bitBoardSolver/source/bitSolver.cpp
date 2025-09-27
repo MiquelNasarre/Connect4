@@ -1,9 +1,5 @@
 #include "bitSolver.h"
-#include <bit>
-
-// Macro to get the column from the column mask
-
-#define _ctz(mask) (((mask >> 1) & 1) | ((mask >> 2) & 1) * 2 | ((mask >> 3) & 1) * 3 | ((mask >> 4) & 1) * 4 | ((mask >> 5) & 1) * 5 | ((mask >> 6) & 1) * 6 | ((mask >> 7) & 1) * 7) 
+#include "tt.h"
 
 // Preferred move order for better pruning
 // If using transposition table, prefered move order depending on best column
@@ -20,42 +16,7 @@ constexpr unsigned char moveOrder[8][8] =
 	{ 7,3,4,2,5,1,6,0 },
 };
 
-// Checks if the board is valid
-// By checking if there are any floating pieces
-// and if the move count matches the pieces on the board
-
-static inline bool invalidBoard(const Board& board)
-{
-	unsigned char moveCount = 0;
-
-	if(board.playerBitboard[0] & board.playerBitboard[1])
-		return true;
-
-#ifdef usingTT
-	if (board.hash != boardHash(board.playerBitboard))
-		return true;
-#endif
-
-	uint64_t boardMask = mask(board);
-	for (unsigned char column = 0; column < 8; column++)
-	{
-		const uint8_t height = board.heights[column];
-
-		if(height > 8)
-			return true;
-
-		moveCount += height;
-
-		uint64_t expected = ((1ULL << height) - 1) << (8 * column);
-		if ((boardMask & COL_MASK(column)) != expected)
-			return true;
-	}
-
-	if (moveCount != board.moveCount)
-		return true;
-
-	return false;
-}
+static inline TransTable* TT = nullptr;
 
 // ----------------------------------------------------------------------------------------------------------
 // 
@@ -123,7 +84,7 @@ static inline SolveResult tinyAlphaBetaTree(Board& board, SolveResult alpha, Sol
 // This is the main function to solve the board
 // Uses transposition tables, with best move ordering and alpha beta pruning
 
-static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth)
+static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth, TransTable* TT)
 {
 	// First using the transposition tables we want to check if
 	// we have already encountered this position before.
@@ -137,17 +98,18 @@ static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, So
 	// Else if it is smaller than our current beta we adjust beta
 
 	unsigned char colTT = 3u;
-	TTEntry* storedData = TT.storedBoard(board.hash);
+#ifdef DEPTH_TABLES
+	TTEntry* storedData = TT[board.moveCount].storedBoard(board.hash);
+#else
+	TTEntry* storedData = TT->storedBoard(board.hash);
+#endif
 	if (storedData)
 	{
-		if (storedData->bestCol != 255)
-			colTT = storedData->bestCol;
-
-
 		SolveResult score = (SolveResult)storedData->score;
 #ifdef DEPTH_TESTING
 		if (score)
 			return score;
+
 		if (storedData->depth >= depth) 
 #endif
 			switch (storedData->flag)
@@ -166,29 +128,21 @@ static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, So
 				break;
 			}
 
-#ifdef GARDENER
-		if (storedData->forcePlay)
-		{
-			playMove(board, colTT);
-			const SolveResult score = (SolveResult)-alphaBetaTreeSolve(board, (SolveResult)-beta, (SolveResult)-alpha, depth - 1);
-			undoMove(board, colTT);
+		// Tree cutoff
 
-			uint8_t ttFlag = ENTRY_FLAG_EXACT;
-			if (score >= beta) ttFlag = ENTRY_FLAG_LOWER;
-			else if (score <= alpha) ttFlag = ENTRY_FLAG_UPPER;
-			TT.store(board.hash, depth, score, ttFlag, colTT, colTT);
-			return score;
-		}
-#endif
+		if (depth == 1u || board.moveCount == 63u)
+			return DRAW;
+
+		if (storedData->bestCol != 255)
+			colTT = storedData->bestCol;
+
 	}
 	else
 	{
 		// Checks if a move is winning for the current player or the other player
 		// Returns wins from our player and counts possible wins of the other player
 		// Wins are checked here so there is no need to check them anywhere else
-#ifdef GARDENER
-		uint8_t oppWinsMask = 0u;
-#endif
+
 		for (unsigned char column : moveOrder[colTT])
 		{
 			if (!canPlay(board, column))
@@ -198,55 +152,24 @@ static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, So
 
 			if (is_win(board.playerBitboard[board.sideToPlay] | s))
 			{
-				TT.store(board.hash, depth, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT);
+#ifdef DEPTH_TABLES
+				TT[board.moveCount].store(board.hash, depth, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT, column);
+#else
+				TT->store(board.hash, depth, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT, column);
+#endif
 				return CURRENT_PLAYER_WIN;
 			}
-#ifdef GARDENER
-			if (is_win(board.playerBitboard[board.sideToPlay ^ 1] | s))
-				oppWinsMask |= 1u << column;
-#endif
 		}
-
-		// Checks if the other player has winning moves:
-		// If it has more than one the other player wins
-		// If it has one our player is forced to block it
-
-#ifdef GARDENER
-		if (oppWinsMask)
-		{
-			const uint16_t oppWins = __popcnt16(oppWinsMask);
-			if (oppWins >= 2u)
-			{
-				TT.store(board.hash, depth, OTHER_PLAYER_WIN, ENTRY_FLAG_EXACT);
-				return OTHER_PLAYER_WIN;
-			}
-
-
-			// Tree cutoff
-			if (depth - 1 == 0 || board.moveCount == 63)
-			{
-				TT.store(board.hash, depth, DRAW, ENTRY_FLAG_EXACT);
-				return DRAW;
-			}
-
-			const unsigned char column = _ctz(oppWinsMask);
-			playMove(board, column);
-			const SolveResult score = (SolveResult)-alphaBetaTreeSolve(board, (SolveResult)-beta, (SolveResult)-alpha, depth - 1);
-			undoMove(board, column);
-
-			uint8_t ttFlag = ENTRY_FLAG_EXACT;
-			if (score >= beta) ttFlag = ENTRY_FLAG_LOWER;
-			else if (score <= alpha) ttFlag = ENTRY_FLAG_UPPER;
-			TT.store(board.hash, depth, score, ttFlag, column, 1u);
-			return score;
-		}
-#endif
 
 		// Tree cutoff
 
-		if (depth - 1 == 0 || board.moveCount == 63)
+		if (depth == 1u || board.moveCount == 63u)
 		{
-			TT.store(board.hash, depth, DRAW, ENTRY_FLAG_EXACT);
+#ifdef DEPTH_TABLES
+			TT[board.moveCount].store(board.hash, depth, DRAW, ENTRY_FLAG_EXACT);
+#else
+			TT->store(board.hash, depth, DRAW, ENTRY_FLAG_EXACT);
+#endif
 			return DRAW;
 		}
 	}
@@ -254,8 +177,8 @@ static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, So
 	// Usual alphe-beta pruning recursive algorithm
 	// Moves are ordered starting from the column suggested by the TT
 
-	unsigned char bestCol = 255u;
-	SolveResult best = OTHER_PLAYER_WIN;
+	unsigned char bestCol = colTT;
+	SolveResult best = INVALID_BOARD;
 	const SolveResult alpha0 = alpha;
 
 	for (unsigned char column : moveOrder[colTT])
@@ -264,7 +187,7 @@ static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, So
 			continue;
 
 		playMove(board, column);
-		const SolveResult score = -alphaBetaTreeSolve(board, -beta, -alpha, depth - 1);
+		const SolveResult score = -alphaBetaTreeSolve(board, -beta, -alpha, depth - 1, TT);
 		undoMove(board, column);
 
 		if (score > best)
@@ -286,14 +209,18 @@ static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, So
 	uint8_t ttFlag = ENTRY_FLAG_EXACT;
 	if (best >= beta) ttFlag = ENTRY_FLAG_LOWER;
 	else if (best <= alpha0) ttFlag = ENTRY_FLAG_UPPER;
-	TT.store(board.hash, depth, best, ttFlag, bestCol);
+#ifdef DEPTH_TABLES
+	TT[board.moveCount].store(board.hash, depth, best, ttFlag, bestCol);
+#else
+	TT->store(board.hash, depth, best, ttFlag, bestCol);
+#endif
 	return best;
 }
 
 // Solves the given board position up to a certain depth
 // It checks the validity of the board and then initializes the alpha-beta pruning tree
 
-SolveResult solveBoard(const Board& initialBoard, unsigned char depth)
+SolveResult solveBoard(const Board& initialBoard, unsigned char depth, bool clearTT)
 {
 	if (!Z_PIECE[0][0])
 		init_zobrist();
@@ -307,22 +234,102 @@ SolveResult solveBoard(const Board& initialBoard, unsigned char depth)
 	if (is_win(initialBoard.playerBitboard[initialBoard.sideToPlay ^ 1]))
 		return OTHER_PLAYER_WIN;
 
-	if (!TT.entries)
-		TT.init();
-
 	Board board = initialBoard;
 
 	if (depth > 64 - board.moveCount)
 		depth = 64 - board.moveCount;
 
-	SolveResult score = alphaBetaTreeSolve(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth);
+#ifdef DEPTH_TABLES
+	if(!TT)
+		TT = (TransTable*)calloc(64, sizeof(TransTable));
 
-	return score;
+	for (int d = board.moveCount; d < board.moveCount + depth; d++)
+		if (!TT[d].entries)
+			TT[d].init();
+	
+	if (clearTT)
+		for (unsigned char d = 0; d < 64; d++)
+			TT[d].clear();
+#else
+	if (!TT)
+		TT = new(TransTable);
+
+	if(clearTT)
+		TT->clear();
+#endif
+
+	return alphaBetaTreeSolve(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, TT);
 }
 
-// Calls the function clear on the transposition table
+// Same as the previous one but assumes validity checks have been done
 
-void clearTranspositionTable()
+SolveResult noChecksSolveBoard(const Board& initialBoard, unsigned char depth)
 {
-	TT.clear();
+	Board board = initialBoard;
+
+	if (depth > 64 - board.moveCount)
+		depth = 64 - board.moveCount;
+
+#ifdef DEPTH_TABLES
+	if(!TT)
+		TT = (TransTable*)calloc(64, sizeof(TransTable));
+
+	for (int d = board.moveCount; d < board.moveCount + depth; d++)
+		if (!TT[d].entries)
+			TT[d].init();
+#else
+	if (!TT)
+		TT = new(TransTable);
+#endif
+
+	return alphaBetaTreeSolve(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, TT);
+}
+
+// If the position is stored on the transposition table it retrieves the best column
+
+unsigned char retrieveColumn(const Board& board)
+{
+	if (!TT || !TT[board.moveCount].entries)
+		return 255;
+
+	TTEntry* entry = TT[board.moveCount].storedBoard(board.hash);
+
+	if (!entry)
+		return 255;
+
+	return entry->bestCol;
+}
+
+// If there is a forced win by any of the players it will find the best move
+// For the winning player is the one that wins the fastest
+// For the losing player is the one that delays the loss the longest
+// First value is the column second value is the distance
+
+unsigned char* findBestPath(const Board& board)
+{
+	Board b = board;
+
+	TransTable* TTtemp = (TransTable*)calloc(64, sizeof(TransTable));
+
+	SolveResult result = DRAW;
+	unsigned char depth = 0u;
+	while (!result)
+	{
+		depth++;
+		for (int d = board.moveCount; d < board.moveCount + depth; d++)
+			if (!TTtemp[d].entries)
+				TTtemp[d].init();
+
+		result = alphaBetaTreeSolve(b, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, TTtemp);
+	}
+	unsigned char* solution = (unsigned char*)calloc(2, sizeof(char));
+	solution[0] = TTtemp[board.moveCount].storedBoard(board.hash)->bestCol;
+	solution[1] = depth;
+
+	for (int d = board.moveCount; d < board.moveCount + depth; d++)
+		if (TTtemp[d].entries)
+			TTtemp[d].erase();
+	free(TTtemp);
+
+	return solution;
 }
