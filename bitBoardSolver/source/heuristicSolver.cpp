@@ -300,12 +300,12 @@ float heuristicTree(Board& board, float alpha, float beta, unsigned char depth, 
 	}
 
 	// Once the TT has been checked, the moves are ordered and no wins or losses 
-	// have been found, the alpha beta pruning tree algorithm is used
+	// have been found, the alpha beta pruning tree algorithm is used.
 	// 
-	// In this case we also implement PVS this only allows the first move to check on a full scope
-	// Only allowing the rest of moves if they can surpass a certain threshold.
-	// Basically it closing the window for the moves to make sure they can actually do anything good
-	// and if they can it allows them to search the full scope
+	// In this case we also implement PVS (Principal Variation Search), this only allows the 
+	// first move to check on a full scope. Only allowing the rest of moves if they can surpass 
+	// a certain threshold. Basically it closing the window for the moves to make sure they can 
+	// actually do anything good and if they can it allows them to search the full scope.
 
 	float alpha0 = alpha;
 	playMove(board, order[0]);
@@ -330,7 +330,7 @@ float heuristicTree(Board& board, float alpha, float beta, unsigned char depth, 
 		playMove(board, column);
 		float score = -heuristicTree(board, -alpha - POINT_DISTANCE, -alpha, depth - 1, bitDepth, HTT); // probe
 		if (score > alpha)
-			score = -heuristicTree(board, -beta, -alpha, depth - 1, bitDepth, HTT);  // re-search
+			score = -heuristicTree(board, -beta, -alpha, depth - 1, bitDepth, HTT);  // re-search at full window
 		undoMove(board, column);
 
 		if (score > best)

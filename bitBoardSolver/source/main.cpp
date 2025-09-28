@@ -10,9 +10,9 @@ int main()
     //board.currentPlayer = YELLOW;
 
 //#define BIT_TREE
-#define EVAL_TREE
+//#define EVAL_TREE
 //#define PLAY
-//#define LET_PLAY
+#define LET_PLAY
 //#define BEST_PATH
 
 #ifdef BIT_TREE

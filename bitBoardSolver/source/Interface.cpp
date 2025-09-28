@@ -299,7 +299,7 @@ void MachineAgainstMachine(const Connect4Board board, float Max_time, unsigned c
 			printf("better for %s.", bitBoard.sideToPlay ? "RED" : "YELLOW");
 			break;
 		case DRAW:
-			printf("a draw. Value: %.3f", eval.eval);
+			printf("a draw.");
 			break;
 		}
 

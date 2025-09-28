@@ -25,12 +25,12 @@ Constants and enums for the Connect4 bitboard
 
 enum SolveResult : char
 {
-	CURRENT_PLAYER_WIN = 1,
-	DRAW = 0,
-	OTHER_PLAYER_WIN = -1,
-	INVALID_BOARD = -2,
-	CURRENT_PLAYER_BETTER = 2,
-	OTHER_PLAYER_BETTER = 3,
+	CURRENT_PLAYER_WIN		=  1,
+	DRAW					=  0,
+	OTHER_PLAYER_WIN		= -1,
+	INVALID_BOARD			= -2,
+	CURRENT_PLAYER_BETTER	=  2,
+	OTHER_PLAYER_BETTER		=  3,
 };
 
 // Simple operator to avoid stuffing the code with type casts.
