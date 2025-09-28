@@ -29,3 +29,5 @@ extern void playAgainstMachine(const Connect4Board board, const Player YourPlaye
 extern void MachineAgainstMachine(const Connect4Board board, float Max_time, unsigned char bitDepth, bool clear_screen = true);
 
 extern float evaluatePosition(const Connect4Board& board, unsigned char depth, unsigned char bitDepth);
+
+extern unsigned char* findBestMove(const Connect4Board& board);

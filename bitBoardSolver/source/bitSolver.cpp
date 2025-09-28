@@ -1,8 +1,7 @@
 #include "bitSolver.h"
 #include "tt.h"
 
-// Preferred move order for better pruning
-// If using transposition table, prefered move order depending on best column
+// Preferred move order for better pruning depending on the first column
 
 constexpr unsigned char moveOrder[8][8] =
 {
@@ -15,6 +14,9 @@ constexpr unsigned char moveOrder[8][8] =
 	{ 6,3,4,2,5,1,0,7 },
 	{ 7,3,4,2,5,1,6,0 },
 };
+
+// The transposition table used by solve board is defined as a global 
+// so that the function retrieve column can also access it.
 
 static inline TransTable* TT = nullptr;
 
@@ -46,7 +48,7 @@ static inline TransTable* TT = nullptr;
 // ----------------------------------------------------------------------------------------------------------
 
 // This is just a tiny helper funtion very useful for reconaissance if you are doing a very big tree
-// it can cut a lot of branches off, but too expensive for any small tree
+// it can cut a lot of branches off, but too expensive for any small tree.
 
 static inline SolveResult tinyAlphaBetaTree(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth)
 {
@@ -81,7 +83,8 @@ static inline SolveResult tinyAlphaBetaTree(Board& board, SolveResult alpha, Sol
 	return best;
 }
 
-// This is the main function to solve the board
+// This is the main function of this file.
+// It solves a given position up to a certain depth, returns win, loss or draw.
 // Uses transposition tables, with best move ordering and alpha beta pruning
 
 static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth, TransTable* TT)
@@ -98,11 +101,9 @@ static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, So
 	// Else if it is smaller than our current beta we adjust beta
 
 	unsigned char colTT = 3u;
-#ifdef DEPTH_TABLES
+
 	TTEntry* storedData = TT[board.moveCount].storedBoard(board.hash);
-#else
-	TTEntry* storedData = TT->storedBoard(board.hash);
-#endif
+
 	if (storedData)
 	{
 		SolveResult score = (SolveResult)storedData->score;
@@ -152,11 +153,7 @@ static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, So
 
 			if (is_win(board.playerBitboard[board.sideToPlay] | s))
 			{
-#ifdef DEPTH_TABLES
 				TT[board.moveCount].store(board.hash, depth, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT, column);
-#else
-				TT->store(board.hash, depth, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT, column);
-#endif
 				return CURRENT_PLAYER_WIN;
 			}
 		}
@@ -165,11 +162,7 @@ static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, So
 
 		if (depth == 1u || board.moveCount == 63u)
 		{
-#ifdef DEPTH_TABLES
 			TT[board.moveCount].store(board.hash, depth, DRAW, ENTRY_FLAG_EXACT);
-#else
-			TT->store(board.hash, depth, DRAW, ENTRY_FLAG_EXACT);
-#endif
 			return DRAW;
 		}
 	}
@@ -209,16 +202,13 @@ static inline SolveResult alphaBetaTreeSolve(Board& board, SolveResult alpha, So
 	uint8_t ttFlag = ENTRY_FLAG_EXACT;
 	if (best >= beta) ttFlag = ENTRY_FLAG_LOWER;
 	else if (best <= alpha0) ttFlag = ENTRY_FLAG_UPPER;
-#ifdef DEPTH_TABLES
 	TT[board.moveCount].store(board.hash, depth, best, ttFlag, bestCol);
-#else
-	TT->store(board.hash, depth, best, ttFlag, bestCol);
-#endif
+
 	return best;
 }
 
-// Solves the given board position up to a certain depth
-// It checks the validity of the board and then initializes the alpha-beta pruning tree
+// Solves the given board position up to a certain depth.
+// It checks the validity of the board and then initializes the alpha-beta pruning tree.
 
 SolveResult solveBoard(const Board& initialBoard, unsigned char depth, bool clearTT)
 {
@@ -239,29 +229,22 @@ SolveResult solveBoard(const Board& initialBoard, unsigned char depth, bool clea
 	if (depth > 64 - board.moveCount)
 		depth = 64 - board.moveCount;
 
-#ifdef DEPTH_TABLES
 	if(!TT)
 		TT = (TransTable*)calloc(64, sizeof(TransTable));
 
 	for (int d = board.moveCount; d < board.moveCount + depth; d++)
-		if (!TT[d].entries)
+		if (!TT[d].is_init())
 			TT[d].init();
 	
 	if (clearTT)
 		for (unsigned char d = 0; d < 64; d++)
 			TT[d].clear();
-#else
-	if (!TT)
-		TT = new(TransTable);
-
-	if(clearTT)
-		TT->clear();
-#endif
 
 	return alphaBetaTreeSolve(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, TT);
 }
 
-// Same as the previous one but assumes validity checks have been done
+// Same as the previous one but assumes validity checks have been done.
+// Used for win checks on bigger heuristic trees.
 
 SolveResult noChecksSolveBoard(const Board& initialBoard, unsigned char depth)
 {
@@ -270,26 +253,22 @@ SolveResult noChecksSolveBoard(const Board& initialBoard, unsigned char depth)
 	if (depth > 64 - board.moveCount)
 		depth = 64 - board.moveCount;
 
-#ifdef DEPTH_TABLES
 	if(!TT)
 		TT = (TransTable*)calloc(64, sizeof(TransTable));
 
 	for (int d = board.moveCount; d < board.moveCount + depth; d++)
-		if (!TT[d].entries)
+		if (!TT[d].is_init())
 			TT[d].init();
-#else
-	if (!TT)
-		TT = new(TransTable);
-#endif
 
 	return alphaBetaTreeSolve(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, TT);
 }
 
-// If the position is stored on the transposition table it retrieves the best column
+// If the position is stored on the transposition table it retrieves the best column.
+// if the position is a mate situation it does not guarantee best path.
 
 unsigned char retrieveColumn(const Board& board)
 {
-	if (!TT || !TT[board.moveCount].entries)
+	if (!TT || !TT[board.moveCount].is_init())
 		return 255;
 
 	TTEntry* entry = TT[board.moveCount].storedBoard(board.hash);
@@ -300,10 +279,10 @@ unsigned char retrieveColumn(const Board& board)
 	return entry->bestCol;
 }
 
-// If there is a forced win by any of the players it will find the best move
-// For the winning player is the one that wins the fastest
-// For the losing player is the one that delays the loss the longest
-// First value is the column second value is the distance
+// If there is a forced win by any of the players it will find the best move.
+// For the winning player is the one that wins the fastest.
+// For the losing player is the one that delays the loss the longest.
+// First value is the column second value is the distance.
 
 unsigned char* findBestPath(const Board& board)
 {
@@ -317,7 +296,7 @@ unsigned char* findBestPath(const Board& board)
 	{
 		depth++;
 		for (int d = board.moveCount; d < board.moveCount + depth; d++)
-			if (!TTtemp[d].entries)
+			if (!TTtemp[d].is_init())
 				TTtemp[d].init();
 
 		result = alphaBetaTreeSolve(b, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, TTtemp);
@@ -327,7 +306,7 @@ unsigned char* findBestPath(const Board& board)
 	solution[1] = depth;
 
 	for (int d = board.moveCount; d < board.moveCount + depth; d++)
-		if (TTtemp[d].entries)
+		if (TTtemp[d].is_init())
 			TTtemp[d].erase();
 	free(TTtemp);
 

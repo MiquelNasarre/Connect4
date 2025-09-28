@@ -1,10 +1,10 @@
 #include "zobrist.h"
 
-// extern Definitions for zobrist.h
+// extern Definitions for zobrist.h.
 
 uint64_t Z_PIECE[2][64] = { 0ULL };
 
-// Nice simple function to mixup some numbers
+// Nice simple function to mixup some numbers.
 
 static inline uint64_t splitmix64(uint64_t& x) {
     x += 0x9E3774B97F4A7C15ULL;
@@ -15,7 +15,8 @@ static inline uint64_t splitmix64(uint64_t& x) {
     return z ^ (z >> 31);
 }
 
-// This function initialises the Zobrist values for each piece and spot
+// This function initialises the Zobrist values for each
+// piece and spot by iterating the seed through the mixer.
 
 void init_zobrist(uint64_t seed) 
 {

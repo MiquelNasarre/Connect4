@@ -6,8 +6,8 @@
 /* TRANSPOSITION TABLE HEADER FILE 
 -------------------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------------------
-This header will store the structures, funtions and macros needed
-to use transposition tables in our tree generation algorithms
+This header stores the structures, funtions and macros needed
+to use transposition tables in our tree generation algorithms.
 -------------------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------------------
 */
@@ -18,38 +18,25 @@ Macros for TTs
 -------------------------------------------------------------------------------------------------------
 */
 
-// Generates multiple transposition for different depths on the tree
-// proven useful for bigger trees, to avoid overriding hot positions
-// and probably useful when using the tree for heuristic
-
-#define DEPTH_TABLES
-
-// Depth testing is for when you have multiple trees sharing TT at different depths
+// Depth testing is for when you have multiple trees sharing TT at different depths.
+// You should only diactivate it when only using bitSolver.h for single trees.
 
 #define DEPTH_TESTING
 
-// Constants useful for defining values relevant to the transposition tables
-// You can modify them here or call the functions with a set value
+// Number of entries that will be created by defaul in a transposition table.
+// 
+// The solver generates a TT for every moveCount that it analises. That way it avoids 
+// overriding hot boards of different depths. But that comes at the cost of a lor of 
+// memory usage. 
+// The number below seems to be the perfect balance between mantaining hot paths 
+// avaliable on the TT and not making it too big for the program to search for
+// different entries. Modify with caution.
 
 #define TT_SIZE 0x4000ULL // 1/4 MB (16384 entries)
 
-/*
-TABLE OF BEST TT_SIZES DEPENING ON DEPTH ON AN EMPTY BOARD
-(Assuming clearing of table after every solve)
-
-DEPTH <= 5:    0x0400ULL    16 KB (1024 entries)
-DEPTH 6->10:   0x1000ULL    64 KB (4096 entries)
-DEPTH 11->15:  0x4000ULL   1/4 MB (16384 entries) <- Currently default
-DEPTH 16->20:  0x20000ULL    2 MB (131072 entries)
-DEPTH > 20:    0x40000ULL    4 MB (262144 entries)
-
-If you make it bigger the extra amount of entries you are generating may 
-not be worth the time it takes for the algorithm to search inside the array 
-*/
-
 // Flags for defining the type of entry depending on the kind of information
-// we have about the Board score
-// We might know the exact score, or an upper or lower bound of the score
+// we have about the Board score.
+// We might know the exact score, or an upper or lower bound of the score.
 
 #define ENTRY_FLAG_EXACT 0u
 #define ENTRY_FLAG_LOWER 1u
@@ -57,7 +44,7 @@ not be worth the time it takes for the algorithm to search inside the array
 
 /*
 -------------------------------------------------------------------------------------------------------
-Transmutation Table and its Entries defintion
+Transposition Table and its Entries defintion
 -------------------------------------------------------------------------------------------------------
 */
 
@@ -73,14 +60,16 @@ struct TTEntry {
     // pad 4 bytes
 };
 
-// This structure defines our tranposition table, it stores an array of 2^n entries
-// Each board can acces an array spot masking their key (hash)
+// This structure defines our tranposition table, it stores an array of 2^n entries.
+// Each board can acces an entry of the array masking their key (hash).
 
-struct TransTable {
-
+struct TransTable 
+{
+private:
     TTEntry* entries = nullptr;
     uint32_t mask;
-    
+
+public:
     inline TransTable(size_t pow2_entries = TT_SIZE)
     {
         init(pow2_entries);
@@ -90,7 +79,17 @@ struct TransTable {
         erase();
     }
 
-    // This function initialises the transposition table to a given length
+    // Checks wether the entries have been created or not.
+
+    inline bool is_init()
+    {
+        if (entries)
+            return true;
+        return false;
+    }
+
+    // This function initialises the transposition table to a given length.
+    // The lenght must be a power of 2 for the mask to work properly.
 
     inline void init(size_t pow2_entries = TT_SIZE)
     {
@@ -101,7 +100,7 @@ struct TransTable {
         mask = (uint32_t)(pow2_entries - 1);
     }
 
-    // This function sets to zero the entire transposition table
+    // This function sets to zero the entire transposition table.
 
     inline void clear()
     {
@@ -111,7 +110,7 @@ struct TransTable {
         memset(entries, 0U, sizeof(TTEntry) * (mask + 1));
     }
 
-    // This function erases the memory of the transposition table
+    // This function erases the memory of the transposition table.
 
     inline void erase()
     {
@@ -122,8 +121,8 @@ struct TransTable {
         entries = nullptr;
     }
 
-    // Checks to  see if the board position is stored in the table
-    // If so, returns the pointer, otherwise returns nullptr
+    // Checks to  see if the board position is stored in the table.
+    // If so, returns the pointer, otherwise returns nullptr.
 
     inline TTEntry* storedBoard(uint64_t key) const
     {
@@ -135,9 +134,9 @@ struct TransTable {
         return nullptr;
     }
 
-    // This function returns the pointer to an entry of the table given a certain key
+    // This function returns the pointer to an entry of the table given a certain key.
     // To choose the position it choses between the masked key or its tggled one,
-    // allowing for better collision management. It is called 2-slot bucket
+    // allowing for better collision management. It is called 2-slot bucket.
 
     inline TTEntry* probe(uint64_t key) const
     {
@@ -151,7 +150,7 @@ struct TransTable {
         return e1;
     }
 
-    // This function receives a TTentry and stores it inside te transmutation table
+    // This function receives a TT entry and stores it inside te transposition table.
 
     inline void store(uint64_t key, uint8_t depth, int8_t score, uint8_t flag, uint8_t bestCol = 255u) const
     {

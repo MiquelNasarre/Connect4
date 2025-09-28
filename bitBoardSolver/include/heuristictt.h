@@ -6,8 +6,8 @@
 /* HEURISTIC TRANSPOSITION TABLE HEADER FILE
 -------------------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------------------
-This header will store the structures, funtions and macros needed
-to use transposition tables in our heuristic tree
+This header stores the structures, funtions and macros needed
+to use transposition tables in our heuristic tree algorithms.
 -------------------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------------------
 */
@@ -18,17 +18,20 @@ Macros for HTTs
 -------------------------------------------------------------------------------------------------------
 */
 
-// Depth testing is for when you have multiple trees sharing TT at different depths
-
-#define DEPTH_TESTING
-
-// Number of entries that will be created by defaul in a transposition table
+// Number of entries that will be created by defaul in a transposition table.
+// 
+// The solver generates a TT for every moveCount that it analises. That way it avoids 
+// overriding hot boards of different depths. But that comes at the cost of a lor of 
+// memory usage. 
+// The number below seems to be the perfect balance between mantaining hot paths 
+// avaliable on the TT and not making it too big for the program to search for
+// different entries. Modify with caution.
 
 #define HTT_SIZE 0x4000ULL // 3/8 MB (16384 entries)
 
 // Flags for defining the type of entry depending on the kind of information
-// we have about the Board score
-// We might know the exact score, or an upper or lower bound of the score
+// we have about the Board score.
+// We might know the exact score, or an upper or lower bound of the score.
 
 #define ENTRY_FLAG_EXACT 0u
 #define ENTRY_FLAG_LOWER 1u
@@ -36,14 +39,15 @@ Macros for HTTs
 
 /*
 -------------------------------------------------------------------------------------------------------
-Transmutation Table and its Entries defintion
+Transposition Table and its Entries defintion
 -------------------------------------------------------------------------------------------------------
 */
 
 // This structure defines an entry of the transposition table, storing the key or board hash
 // and other values the minimax algorith will use to avoid unnecesary computation.
 
-struct HTTEntry {
+struct HTTEntry 
+{
     uint64_t key;           // full key
     uint8_t  order[8];      // stores the moves ordered through the evaluation
     float    eval;          // -1 to +1 from current side POV
@@ -65,14 +69,16 @@ struct HTTEntry {
     }
 };
 
-// This structure defines our tranposition table, it stores an array of 2^n entries
-// Each board can acces an array spot masking their key (hash)
+// This structure defines our tranposition table, it stores an array of 2^n entries.
+// Each board can acces an entry of the array masking their key (hash).
 
-struct HeuristicTransTable {
-
+struct HeuristicTransTable 
+{
+private:
     HTTEntry* entries = nullptr;
     uint32_t mask;
 
+public:
     inline HeuristicTransTable(size_t pow2_entries = HTT_SIZE)
     {
         init(pow2_entries);
@@ -82,7 +88,17 @@ struct HeuristicTransTable {
         erase();
     }
 
-    // This function initialises the transposition table to a given length
+    // Checks wether the entries have been created or not.
+
+    inline bool is_init()
+    {
+        if (entries)
+            return true;
+        return false;
+    }
+
+    // This function initialises the transposition table to a given length.
+    // The lenght must be a power of 2 for the mask to work properly.
 
     inline void init(size_t pow2_entries = HTT_SIZE)
     {
@@ -93,7 +109,7 @@ struct HeuristicTransTable {
         mask = (uint32_t)(pow2_entries - 1);
     }
 
-    // This function sets to zero the entire transposition table
+    // This function sets to zero the entire transposition table.
 
     inline void clear()
     {
@@ -103,7 +119,7 @@ struct HeuristicTransTable {
         memset(entries, 0U, sizeof(HTTEntry) * (mask + 1));
     }
 
-    // This function erases the memory of the transposition table
+    // This function erases the memory of the transposition table.
 
     inline void erase()
     {
@@ -114,8 +130,8 @@ struct HeuristicTransTable {
         entries = nullptr;
     }
 
-    // Checks to  see if the board position is stored in the table
-    // If so, returns the pointer, otherwise returns nullptr
+    // Checks to  see if the board position is stored in the table.
+    // If so, returns the pointer, otherwise returns nullptr.
 
     inline HTTEntry* storedBoard(uint64_t key) const
     {
@@ -127,9 +143,9 @@ struct HeuristicTransTable {
         return nullptr;
     }
 
-    // This function returns the pointer to an entry of the table given a certain key
+    // This function returns the pointer to an entry of the table given a certain key.
     // To choose the position it choses between the masked key or its tggled one,
-    // allowing for better collision management. It is called 2-slot bucket
+    // allowing for better collision management. It is called 2-slot bucket.
 
     inline HTTEntry* probe(uint64_t key) const
     {
@@ -143,13 +159,15 @@ struct HeuristicTransTable {
         return e1;
     }
 
-    // This function receives a TTentry and stores it inside te transmutation table
+    // This function receives a TTentry and stores it inside te transposition table.
 
-    inline void store(uint64_t key, uint8_t order[8], uint8_t depth, float score, uint8_t flag) const
+    inline float store(uint64_t key, uint8_t order[8], uint8_t depth, float score, uint8_t flag) const
     {
         HTTEntry* e = probe(key);
 
         if (depth >= e->depth || e->key != key)
             *e = HTTEntry(key, order, score, depth, flag);
+
+        return score;
     }
 };

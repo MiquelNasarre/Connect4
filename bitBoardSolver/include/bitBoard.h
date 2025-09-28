@@ -1,14 +1,27 @@
 #pragma once
 #include "zobrist.h"
 
-/*
+/* CONNECT4 BITBOARD HEADER FILE
 -------------------------------------------------------------------------------------------------------
-Definition of the board object that will be used for solving connect4
+-------------------------------------------------------------------------------------------------------
+This header includes macros, enums, structures and inline functions
+to create a Connect4 bitBoard useful for fast computation.
+It includes zobrist.h that will provide a hash for any given board.
+-------------------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------------------
 */
 
-// Possible results of the solver
-// The set values are important to simplify minimax algorithm
+// In this representation, the board is a 8x8 grid (64 cells).
+// The map bit index is calculated as: index = column * 8 + row.
+
+/*
+-------------------------------------------------------------------------------------------------------
+Constants and enums for the Connect4 bitboard
+-------------------------------------------------------------------------------------------------------
+*/
+
+// Possible results of the solver.
+// The set values are important to simplify minimax algorithm.
 
 enum SolveResult : char
 {
@@ -20,15 +33,14 @@ enum SolveResult : char
 	OTHER_PLAYER_BETTER = 3,
 };
 
-// Simple operator to avoid stuffing the code with type casts
+// Simple operator to avoid stuffing the code with type casts.
 
 inline SolveResult operator-(const SolveResult& other)
 {
 	return (SolveResult)-(char)other;
 }
 
-// In this representation, the board is a 8x8 grid (64 cells)
-// the map bit index is calculated as: index = column * 8 + row
+// Masks for any given column or row.
 
 inline constexpr uint64_t Column0 = 0x00000000000000FFULL; // Mask for the column 0
 inline constexpr uint64_t Column1 = 0x000000000000FF00ULL; // Mask for the column 1
@@ -50,10 +62,18 @@ inline constexpr uint64_t Row5 = 0x2020202020202020ULL; // Mask for the row 5
 inline constexpr uint64_t Row6 = 0x4040404040404040ULL; // Mask for the row 6
 inline constexpr uint64_t Row7 = 0x8080808080808080ULL; // Mask for the row 7
 
-inline constexpr uint64_t collapseSW = 0x0000001F1F1F1F1FULL; // Mask to check win in diagonals collapsed SW
-inline constexpr uint64_t collapseSE = 0x1F1F1F1F1F000000ULL; // Mask to check win in diagonals collapsed SE
-inline constexpr uint64_t collapseE  = 0xFFFFFFFFFF000000ULL; // Mask to check win in horozontal collapsed E
-inline constexpr uint64_t collapseS  = 0x1F1F1F1F1F1F1F1FULL; // Mask to check win in vertical collapsed S
+// Masks used to check for winning positions.
+
+inline constexpr uint64_t collapseSW = 0x0000001F1F1F1F1FULL; // To check win in diagonals collapsed SW
+inline constexpr uint64_t collapseSE = 0x1F1F1F1F1F000000ULL; // To check win in diagonals collapsed SE
+inline constexpr uint64_t collapseE  = 0xFFFFFFFFFF000000ULL; // To check win in horozontal collapsed E
+inline constexpr uint64_t collapseS  = 0x1F1F1F1F1F1F1F1FULL; // To check win in vertical collapsed S
+
+/*
+-------------------------------------------------------------------------------------------------------
+Definition of the bitboard struct that will be used for solving connect4
+-------------------------------------------------------------------------------------------------------
+*/
 
 typedef struct board {
 	// Each player's pieces are represented in a 64-bit integer (bitboard)
@@ -80,21 +100,21 @@ Helper inline functions to cleanup the code
 -------------------------------------------------------------------------------------------------------
 */
 
-// Returns the board of both player pieces combined
+// Returns the board of both player pieces combined.
 
 static inline uint64_t mask(const Board& board)
 {
 	return board.playerBitboard[0] | board.playerBitboard[1];
 }
 
-// Check if the column is not full
+// Check if the column is not full.
 
 static inline bool canPlay(const Board& board, const unsigned char column)
 {
 	return board.heights[column] ^ 8u;
 }
 
-// Returns a bit located at a given position in the board
+// Returns a bit located at a given position in the board.
 
 static inline uint64_t bit_at(const unsigned char column, const unsigned char row)
 {
@@ -107,9 +127,9 @@ In game functions for board operations
 -------------------------------------------------------------------------------------------------------
 */
 
-// Checks if the board is valid
-// By checking if there are any floating pieces
-// and if the move count matches the pieces on the board
+// Checks if the board is valid by checking if there are any floating pieces,
+// if the hash of the board corresponds with the one it is supposed to be,
+// and if the move count matches the pieces on the board.
 
 static inline bool invalidBoard(const Board& board)
 {
@@ -142,8 +162,8 @@ static inline bool invalidBoard(const Board& board)
 	return false;
 }
 
-// Place a stone for side-to-move in column c (assumes can_play was true)
-// Updates board hash and switches player at the end of the move
+// Places a stone for side-to-move in column c (assumes can_play was true).
+// Updates board hash and switches player at the end of the move.
 
 static inline void playMove(Board& board, const unsigned char column)
 {
@@ -157,8 +177,8 @@ static inline void playMove(Board& board, const unsigned char column)
 	++board.moveCount;
 }
 
-// Switches player back to previous move. Undoes hash changes
-// Removes last stone placed in that column (assumes it was played by the correct player)
+// Switches player back to previous move and ndoes hash changes.
+// Removes last stone placed in that column (assumes it was played by the correct player).
 
 static inline void undoMove(Board& board, const unsigned char column)
 {
@@ -172,11 +192,11 @@ static inline void undoMove(Board& board, const unsigned char column)
 	board.hash ^= Z_PIECE[board.sideToPlay][column * 8 + row];
 }
 
-// Check if the current player has a winning position
+// Check if the current player has a winning position.
 // To do this it collapses the bitboard in each direction in itself 4 times,
-// then only the bits that are set 4 times in a row will remain
-// This allows checking for all same type wins in a single operation
-// Then masks are used to filter out cross border connect4's
+// then only the bits that are set 4 times in a row will remain.
+// This allows checking for all same type wins in a single operation.
+// Then masks are used to filter out cross border connect4's.
 
 inline bool is_win(const uint64_t playerBitboard) 
 {

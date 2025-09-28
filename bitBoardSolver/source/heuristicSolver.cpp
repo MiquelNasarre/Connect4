@@ -3,11 +3,38 @@
 #include "bitSolver.h"
 #include "Timer.h"
 
+#include <stdio.h>
+
 #include <bit>
 
-inline constexpr unsigned char moveOrder[8] = {3, 4, 2, 5, 1, 6, 0, 7};
+// This is the depth value at which the heuristic tree
+// stops calling the function orderMoves.
 
-float heuristic(const Board& board, unsigned char bitDepth)
+#define NO_ORDERING_DEPTH 2
+
+// This value is the multiplier for the heuristic function value.
+// It has to be small enough to mantain the result between +-1.
+
+#define POINT_DISTANCE 0x1.0p-6f // 1/64 in hexadecimal floating-point
+
+// Default move order used for low depth branches.
+
+#define DEFAULT_MOVE_ORDER { 3, 4, 2, 5, 1, 6, 0, 7 }
+
+// Moment at which the evaluate board function switches
+// to fully solving the position without heuristic.
+
+#define MOVE_COUNT_TRIGGER 30
+
+// This function assigns a value to a given board position.
+// It first generates a bitTree to look for wins and losses.
+// If it doesn't find any it does the following computation.
+//
+// It computes how many connect4's each color could have assuming
+// all the spaces in the board are occupied by that color, and it
+// subtracts the two values, the difference is the board score.
+
+static inline float heuristic(const Board& board, unsigned char bitDepth)
 {
 	// Generates a tree under the position to check for wins or losses
 	// This deepens the heuristic tree making the evaluation fail safe
@@ -58,8 +85,110 @@ float heuristic(const Board& board, unsigned char bitDepth)
 	m1 &= (m1 << 14) & collapseSE;
 	count += (char)__popcnt64(m0) - (char)__popcnt64(m1);
 
-	return count / 128.f; // This maintains the value under +-1 (max is 130 but impossible)
+	return count * POINT_DISTANCE; // This maintains the value under +-1 (max is 130 but impossible)
 }
+
+// This function orders the moves by height from highest to lowest.
+// Also putting the invalid moves at the end.
+// This helps with pruning because most of the time the moves at 
+// the low positions are not good because they lose or they invalidate
+// a winning opportunity.
+
+static inline void orderByHeight(const unsigned char boardHeights[8], unsigned char order[8])
+{
+    unsigned char heights[8];
+    for (unsigned char i = 0; i < 8; ++i)
+        heights[i] = boardHeights[order[i]];
+
+	unsigned char lastCol = 7;
+	unsigned char tempCol, tempHeight;
+
+	for (unsigned char i = 0; i <= lastCol; i++)
+	{
+		// If max height reached it sends it to the end.
+
+		while (heights[i] == 8u)
+		{
+			tempCol = order[i];
+
+			order[i] = order[lastCol];
+			order[lastCol] = tempCol;
+
+			heights[i] = heights[lastCol--];
+		}
+
+		// While height bigger than previous it swaps
+
+		unsigned char j = i;
+		while (j > 0 && heights[j] > heights[j - 1])
+		{
+			tempHeight = heights[j];
+			tempCol = order[j];
+
+			heights[j] = heights[j - 1];
+			heights[j - 1] = tempHeight;
+
+			order[j] = order[j - 1];
+			order[j-- - 1] = tempCol;
+		}
+	}
+}
+
+// This function is called for trees bigger than a certain depth.
+// It generates a heuristic tree of depth 1 and orders the moves
+// according to their score, greatly improving pruning.
+
+static inline float orderMoves(Board& board, unsigned char order[8], unsigned char depth, HeuristicTransTable* HTT)
+{
+	float scores[8] = { INVALID_BOARD, INVALID_BOARD, INVALID_BOARD, INVALID_BOARD, INVALID_BOARD, INVALID_BOARD, INVALID_BOARD, INVALID_BOARD };
+
+	for (unsigned char i = 0; i < 8; i++)
+	{
+		unsigned char column = order[i];
+
+		if (!canPlay(board, column))
+			continue;
+
+		if (is_win(board.playerBitboard[board.sideToPlay] | bit_at(column, board.heights[column])))
+		{
+			order[i] = order[0];
+			order[0] = column;
+			return HTT[board.moveCount].store(board.hash, order, depth, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT);
+		}
+
+		playMove(board, column);
+		scores[i] = -heuristic(board, depth);
+		undoMove(board, column);
+
+		unsigned char j = i;
+		float tempScore;
+		unsigned char tempColumn;
+
+		while (j > 0 && scores[j] > scores[j - 1])
+		{
+			tempScore = scores[j];
+			tempColumn = order[j];
+
+			scores[j] = scores[j - 1];
+			scores[j - 1] = tempScore;
+
+			order[j] = order[j - 1];
+			order[j - 1] = tempColumn;
+
+			j--;
+		}
+	}
+	return scores[0];
+}
+
+// This is the main function of the file, computing the tree to solve the position
+// to a certain depth, and telling the heuristic to search further with the bitTree
+// to a certain bitDepth.
+// The tree for better performance uses transposition tables, that check wheter the 
+// position has already been examined and its indormation is stored in the database.
+// 
+// It also uses alpha-beta pruning, this time paired with node ordering and PVS,
+// which added to the transposition tables makes the pruning a lot more efficient.
 
 float heuristicTree(Board& board, float alpha, float beta, unsigned char depth, unsigned char bitDepth, HeuristicTransTable* HTT)
 {
@@ -77,19 +206,18 @@ float heuristicTree(Board& board, float alpha, float beta, unsigned char depth, 
 	// If we know that our upper bound is lower than our alpha we return the value
 	// Else if it is smaller than our current beta we adjust beta
 
-	unsigned char order[8] = { 3, 4, 2, 5, 1, 6, 0, 7 };
+	unsigned char order[8] = DEFAULT_MOVE_ORDER;
 
 	HTTEntry* storedData = HTT[board.moveCount].storedBoard(board.hash);
 
 	if (storedData)
 	{
 		float score = storedData->eval;
-#ifdef DEPTH_TESTING
+
 		if (score == 1.f || score == -1.f)
 			return score;
 
 		if (storedData->depth >= depth)
-#endif
 			switch (storedData->flag)
 			{
 			case ENTRY_FLAG_EXACT: // Exact value known
@@ -111,92 +239,126 @@ float heuristicTree(Board& board, float alpha, float beta, unsigned char depth, 
 		if (!depth)
 			return heuristic(board, bitDepth);
 
-		order[0] = storedData->order[0];
-		order[1] = storedData->order[1];
-		order[2] = storedData->order[2];
-		order[3] = storedData->order[3];
-		order[4] = storedData->order[4];
-		order[5] = storedData->order[5];
-		order[6] = storedData->order[6];
-		order[7] = storedData->order[7];
-	}
-	else
-	{
-		// Tree cutoff, returns heuristic
+        // Copies move order stored
 
-		if (!depth)
+		if (storedData->depth)
+			for (int i = 0; i < 8; ++i)
+				order[i] = storedData->order[i];
+	}
+	
+	// If is does not have stored data of the position it means it is a first encounter
+	// therefore ordering the nodes and checking for immediate wins can save a lot of 
+	// unnecessary branching.
+	// It is also important to order the nodes if the first encounter was of a diffrent
+	// node ordering standard than now
+	
+	if (!storedData || !storedData->depth || (storedData->depth <= NO_ORDERING_DEPTH && depth > NO_ORDERING_DEPTH))
+	{
+		// If the depth is high enough it will make a small tree to order moves 
+		// It also looks for forced wins or lossses, if it finds one it returns it.
+
+		if (depth > NO_ORDERING_DEPTH)
 		{
-			float score = heuristic(board, bitDepth);
-			HTT[board.moveCount].store(board.hash, order, depth, score, ENTRY_FLAG_EXACT);
-			return score;
+			const float surfaceCheck = orderMoves(board, order, depth, HTT);
+
+			if (surfaceCheck == 1.f || surfaceCheck == -1.f)
+				return surfaceCheck;
 		}
 
-		// Checks if a move is winning for the current player or the other player
-		// Returns wins from our player and counts possible wins of the other player
-		// Wins are checked here so there is no need to check them anywhere else
+		// Otherwise it orders the nodes by height, it performs a simple 
+		// one move win check and it checks for a tree depth cutoff.
 
-		for (unsigned char i = 0; i < 8; i++)
+		else
 		{
-			unsigned char column = order[i];
+			// Tree cutoff, returns heuristic.
 
-			if (!canPlay(board, column))
-				continue;
+			if (!depth)
+				return HTT[board.moveCount].store(board.hash, order, depth, heuristic(board, bitDepth), ENTRY_FLAG_EXACT);
 
-			if (is_win(board.playerBitboard[board.sideToPlay] | bit_at(column, board.heights[column])))
+			// It orders the moves from highest column to lowest column.
+			// Leaving invalid moves at the end.
+
+			orderByHeight(board.heights, order);
+
+			// Checks if a move is winning for the current player.
+			// Wins are checked here so there is no need to check them anywhere else.
+
+			for (unsigned char column : order)
 			{
-				order[i] = order[0];
-				order[0] = column;
-				HTT[board.moveCount].store(board.hash, order, depth, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT);
-				return 1.f;
+				// If a move is invalid it has reached the end due to ordering.
+
+				if (!canPlay(board, column))
+					break;
+
+				// Checks if positioning a piece in this column results in an instant win, returns if thats the case
+
+				if (is_win(board.playerBitboard[board.sideToPlay] | bit_at(column, board.heights[column])))
+					return HTT[board.moveCount].store(board.hash, order, depth, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT);
 			}
 		}
+
 	}
 
-	float best = OTHER_PLAYER_WIN;
-	const float alpha0 = alpha;
+	// Once the TT has been checked, the moves are ordered and no wins or losses 
+	// have been found, the alpha beta pruning tree algorithm is used
+	// 
+	// In this case we also implement PVS this only allows the first move to check on a full scope
+	// Only allowing the rest of moves if they can surpass a certain threshold.
+	// Basically it closing the window for the moves to make sure they can actually do anything good
+	// and if they can it allows them to search the full scope
 
-	for (unsigned char i = 0; i < 8; i++)
+	float alpha0 = alpha;
+	playMove(board, order[0]);
+	float score = -heuristicTree(board, -beta, -alpha, depth - 1, bitDepth, HTT);  // full window
+	undoMove(board, order[0]);
+
+	float best = score;
+	if (best > alpha)
+	{
+		alpha = best;
+		if (alpha >= beta)
+			return HTT[board.moveCount].store(board.hash, order, depth, best, ENTRY_FLAG_LOWER);
+	}
+
+	for (unsigned char i = 1; i < 8; i++)
 	{
 		unsigned char column = order[i];
 
 		if (!canPlay(board, column))
-			continue;
+			break;
 
 		playMove(board, column);
-		const float score = -heuristicTree(board, -beta, -alpha, depth - 1, bitDepth, HTT);
+		float score = -heuristicTree(board, -alpha - POINT_DISTANCE, -alpha, depth - 1, bitDepth, HTT); // probe
+		if (score > alpha)
+			score = -heuristicTree(board, -beta, -alpha, depth - 1, bitDepth, HTT);  // re-search
 		undoMove(board, column);
 
 		if (score > best)
 		{
 			best = score;
 
+			for (unsigned char j = i; j > 0; j--)
+				order[j] = order[j - 1];
+			order[0] = column;
+
 			if (best > alpha)
 			{
-				for (unsigned char j = i; j > 0; j--)
-					order[j] = order[j - 1];
-
-				order[0] = column;
-
 				alpha = best;
 				if (alpha >= beta)
-					break;
+					return HTT[board.moveCount].store(board.hash, order, depth, best, ENTRY_FLAG_LOWER);
 			}
 		}
 	}
 
 	// Before returning it always saves the position in the TT
 
-	uint8_t ttFlag = ENTRY_FLAG_EXACT;
-	if (best >= beta) ttFlag = ENTRY_FLAG_LOWER;
-	else if (best <= alpha0) ttFlag = ENTRY_FLAG_UPPER;
-	HTT[board.moveCount].store(board.hash, order, depth, best, ttFlag);
-	return best;
+	return HTT[board.moveCount].store(board.hash, order, depth, best, (best <= alpha0) ? ENTRY_FLAG_UPPER : ENTRY_FLAG_EXACT);
 }
 
-// Evaluates the given board position up to a certain depth
-// It checks the validity of the board and then initializes the heuristic tree
-// If it finds a winning move it reanalises the position to find the fastest path
-// If if finds a losing move it reanalises the position to find the longest path
+// Evaluates the given board position up to a certain depth.
+// It checks the validity of the board and then initializes the heuristic tree.
+// If it finds a winning move it reanalises the position to find the fastest path.
+// If if finds a losing move it reanalises the position to find the longest path.
 
 SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned char bitDepth)
 {
@@ -218,7 +380,7 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned
 	// or the remaining move count is below a certain threshold
 	// it will compute the entirity of the remaining board
 
-	if (depth + bitDepth > 64 - board.moveCount || board.moveCount > MOVE_COUNT_TRIGGER)
+	if (depth + bitDepth > 64 - board.moveCount || board.moveCount >= MOVE_COUNT_TRIGGER)
 	{
 		float eval = (float)solveBoard(board, 64 - board.moveCount);
 		unsigned char column = retrieveColumn(board);
@@ -250,12 +412,12 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned
 	static HeuristicTransTable* HTT = (HeuristicTransTable*)calloc(64 + 1, sizeof(HeuristicTransTable));
 
 	for (int d = board.moveCount; d < board.moveCount + depth + 1; d++)
-		if (!HTT[d].entries)
+		if (!HTT[d].is_init())
 			HTT[d].init();
 
 	float eval = heuristicTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, bitDepth, HTT);
 
-	unsigned char column = HTT[board.moveCount].probe(board.hash)->order[0];
+	unsigned char column = HTT[board.moveCount].storedBoard(board.hash)->order[0];
 
 	// Depending on the obtained evaluationg will return the value with a different flag
 	// also if it is a Mate situation will find the best path for either player.
@@ -283,6 +445,10 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned
 	else
 		return SolveEval(eval, column, depth, DRAW);
 }
+
+// Evaluates the given board with Iterative Deepening using the evaluateBoard funtion
+// until a certain time threshold is reached or it finds a win.
+// Then it returns the deepest evaluation computed.
 
 SolveEval evaluateBoardTime(const Board& initialBoard, float Max_time, unsigned char bitDepth)
 {

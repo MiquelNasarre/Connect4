@@ -327,3 +327,9 @@ float evaluatePosition(const Connect4Board& board, unsigned char depth, unsigned
 
 	return result;
 }
+
+unsigned char* findBestMove(const Connect4Board& board)
+{
+	Board* bitBoard = translateBoard(board);
+	return findBestPath(*bitBoard);
+}

@@ -1,14 +1,19 @@
 #pragma once
 #include "bitBoard.h"
 
-// Moment at which the algorithm switches to fully solving the position without heuristic
+/* HEURISTIC TREE SOLVING FUNTIONS HEADER FILE
+-------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
+This header includes functions to numerically evaluate a board position
+this funtions will return the SolveEval struct, with the values listed below.
+-------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
+*/
 
-#define MOVE_COUNT_TRIGGER 30
-
-// Return values of the evaluation, this includes a numerical value between -1 and 1
-// the column that gives this best result for the current player
+// Return values of the evaluation, this includes a numerical value between -1 and 1,
+// the column that gives this best result for the current player,
 // the depth that this position was evaluated
-// and a flag that calls the state of the game
+// and a flag that represents the state of the game.
 
 struct SolveEval
 {
@@ -16,11 +21,15 @@ struct SolveEval
 	unsigned char column;
 	unsigned char depth;
 	SolveResult flag;
-
-	SolveEval(float eval, unsigned char column, unsigned char depth, SolveResult flag) 
-		: eval{ eval }, column{ column }, depth{ depth }, flag{ flag } {}
 };
 
+// This will return all the information above after processing a tree of the board to a given depth.
+// Every heuristic function call will check for wins using the bitSoler to a given bitDepth.
+
 extern SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned char bitDepth);
+
+// Evaluates the given board with Iterative Deepening using the evaluateBoard funtion
+// until a certain time threshold is reached or it finds a win.
+// Then it returns the deepest evaluation computed.
 
 extern SolveEval evaluateBoardTime(const Board& initialBoard, float Max_time, unsigned char bitDepth);
