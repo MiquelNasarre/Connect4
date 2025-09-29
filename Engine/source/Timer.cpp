@@ -1,109 +1,307 @@
-#include <Windows.h>
-#include <timeapi.h>
 #include "Timer.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#include <timeapi.h>
+#pragma comment(lib, "winmm.lib")
+#else
+#include <time.h>
 #include <chrono>
-#include <queue>
+#endif
 
-using namespace std::chrono;
+long long Timer::freq_ = 0LL;
 
-void Timer::push(void* last)
+#ifdef _WIN32
+bool Timer::precisionSleeper::_precise_period = false;
+Timer::precisionSleeper Timer::precisionSleeper::helper;
+#endif
+
+/*
+-------------------------------------------------------------------------------------------------------
+Internal helpers
+-------------------------------------------------------------------------------------------------------
+*/
+
+// Pushes current 'last_' into ring (most recent).
+
+inline void Timer::push_last()
 {
-	if (Markers[MaxMarkers - 1u])
-		delete (std::chrono::steady_clock::time_point*)Markers[MaxMarkers - 1u];
+    if (size_)
+        head_ = (head_ + 1u) % cap_;
 
-	for (unsigned int i = MaxMarkers - 1u; i > 0; i--)
-		Markers[i] = Markers[i - 1];
-
-	Markers[0] = new std::chrono::steady_clock::time_point(*(std::chrono::steady_clock::time_point*)last);
+    stamps_[head_] = last_;
+    if (size_ < cap_)
+        size_++;
 }
 
-//	Public
+// Converts tick delta to seconds by dividing by _freq.
 
-Timer::Timer(bool precise) :last{ new std::chrono::steady_clock::time_point }
+inline float Timer::to_sec(long long dt)
 {
-	Markers = (void**)calloc(MaxMarkers, sizeof(void*));
-	*(std::chrono::steady_clock::time_point*)last = std::chrono::steady_clock::now();
-	if (precise)
-		timeBeginPeriod(1);
+    return (float)((double)dt / (double)freq_);
 }
+
+#ifdef _WIN32
+// Reads QPC counter to obtain time.
+
+inline long long Timer::qpc_now() {
+    LARGE_INTEGER v;
+    QueryPerformanceCounter(&v);
+    return (long long)v.QuadPart;
+}
+
+// Reads frequency to be stored in _freq.
+
+inline long long Timer::qpc_freq() {
+    LARGE_INTEGER f;
+    QueryPerformanceFrequency(&f);
+    return (long long)f.QuadPart;
+}
+#endif
+
+/*
+-------------------------------------------------------------------------------------------------------
+Constructors and destructors
+-------------------------------------------------------------------------------------------------------
+*/
+
+// Constructor: Allocates the stamps_ and pushes to the first one
+
+Timer::Timer()
+{
+    {
+#ifdef _WIN32
+        freq_ = qpc_freq();
+        stamps_ = (long long*)::calloc(cap_, sizeof(long long));
+        last_ = qpc_now();
+#else
+        freq_ = 1000000000LL; // ns/sec
+        stamps_ = (long long*)::calloc(cap_, sizeof(long long));
+        timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        last_ = (long long)ts.tv_sec * 1000000000LL + (long long)ts.tv_nsec;
+#endif
+        // seed first mark
+        push_last();
+    }
+}
+
+// Destructor: Frees the stamps_
 
 Timer::~Timer()
 {
-	timeEndPeriod(1);
+    if (stamps_) 
+        ::free(stamps_); 
 }
+
+/*
+-------------------------------------------------------------------------------------------------------
+User end Timer class functions
+-------------------------------------------------------------------------------------------------------
+*/
+
+// Resets history and start new timing window.
 
 void Timer::reset()
 {
-	*(std::chrono::steady_clock::time_point*)last = high_resolution_clock::now();
-	for (unsigned int i = 0; i < MaxMarkers; i++)
-	{
-		if (!Markers[i])
-			break;
-		delete (std::chrono::steady_clock::time_point*)Markers[i];
-		Markers[i] = nullptr;
-	}
-	push(last);
+#ifdef _WIN32
+    last_ = qpc_now();
+#else
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    last_ = (long long)ts.tv_sec * 1000000000LL + (long long)ts.tv_nsec;
+#endif
+    size_ = 0u;
+    head_ = 0u;
+
+    push_last();
 }
+
+// Pushes current time, returns seconds since previous mark.
 
 float Timer::mark()
 {
-	const auto old = *(std::chrono::steady_clock::time_point*)last;
-	*(std::chrono::steady_clock::time_point*)last = steady_clock::now();
-	push(last);
-	return duration<float>(*(std::chrono::steady_clock::time_point*)last - old).count();
+#ifdef _WIN32
+    const long long old = last_;
+    last_ = qpc_now();
+#else
+    const long long old = last_;
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    last_ = (long long)ts.tv_sec * 1000000000LL + (long long)ts.tv_nsec;
+#endif
+    push_last();
+    return to_sec(last_ - old);
 }
+
+// Returns seconds since previous mark without modifying history.
 
 float Timer::check()
 {
-	return duration<float>(steady_clock::now() - *(std::chrono::steady_clock::time_point*)last).count();
+#ifdef _WIN32
+    const long long now = qpc_now();
+#else
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    const long long now = (long long)ts.tv_sec * 1000000000LL + (long long)ts.tv_nsec;
+#endif
+    return to_sec(now - last_);
 }
+
+// Advances 'last' by elapsed time (shifts existing markers forward), 
+// practically skipping the time since last mark, returns elapsed seconds.
 
 float Timer::skip()
 {
-	unsigned int m = 0;
-	for (unsigned int i = 0; i < MaxMarkers; i++)
-	{
-		if (Markers[i])
-			m = i;
-		else break;
-	}
+    const long long old = last_;
+#ifdef _WIN32
+    last_ = qpc_now();
+#else
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    last_ = (long long)ts.tv_sec * 1000000000LL + (long long)ts.tv_nsec;
+#endif
+    const long long dt = last_ - old;
 
-	const auto old = *(std::chrono::steady_clock::time_point*)last;
-	*(std::chrono::steady_clock::time_point*)last = steady_clock::now();
-	for (unsigned int i = 0; i < m; i++)
-		*(std::chrono::steady_clock::time_point*)Markers[i] += *(std::chrono::steady_clock::time_point*)last - old;
-	return duration<float>(*(std::chrono::steady_clock::time_point*)last - old).count();
+    // shift existing markers forward by dt (preserve window without inserting)
+
+    if (size_ > 0) 
+    {
+        // walk stored entries and add dt
+        unsigned idx = head_;
+        for (unsigned i = 0; i < size_; ++i) {
+            stamps_[idx] += dt;
+            idx = (idx + cap_ - 1u) % cap_; // move toward older
+        }
+    }
+
+    return to_sec(dt);
 }
+
+// Returns average seconds per interval over the stored markers. 
+// (0 if insufficient data, size_ < 2).
 
 float Timer::average()
 {
-	if(!Markers[1])
-		return 0.0f;
-	
-	unsigned int m = 0;
-	for (unsigned int i = 0; i < MaxMarkers; i++)
-	{
-		if (Markers[i])
-			m = i;
-		else break;
-	}
-
-	return duration<float>(*(std::chrono::steady_clock::time_point*)Markers[0] - *(std::chrono::steady_clock::time_point*)Markers[m]).count() / float(m);
+    if (size_ < 2) return 0.0f;
+    // newest = stamps_[head_], oldest = walk back size_-1 steps
+    const unsigned oldest_idx = (head_ + cap_ - (size_ - 1u)) % cap_;
+    const long long span = stamps_[head_] - stamps_[oldest_idx];
+    return to_sec(span) / (float)(size_ - 1u);
 }
 
-int Timer::getSize()
+// Returns number of stored markers (size_).
+
+unsigned int Timer::getSize()
 {
-	unsigned int m = 0;
-	for (unsigned int i = 0; i < MaxMarkers; i++)
-	{
-		if (Markers[i])
-			m = i;
-		else return m;
-	}
-	return m;
+    return size_;
 }
+
+// Sets the maximum size for the history ring.
 
 void Timer::setMax(unsigned int max)
 {
-	MaxMarkers = max;
+    if (max == 0u) max = 1u;
+    // allocate new ring and copy newest-first up to max
+    long long* fresh = (long long*)::calloc(max, sizeof(long long));
+
+    unsigned new_size = (size_ < max) ? size_ : max;
+    unsigned idx = head_;
+    for (unsigned i = 0; i < new_size; ++i) 
+    {
+        fresh[i] = stamps_[idx];
+        idx = (idx + cap_ - 1u) % cap_;
+    }
+    // replace
+    if (stamps_) 
+        ::free(stamps_);
+
+    stamps_ = fresh;
+    cap_ = max;
+    size_ = new_size;
+    head_ = 0u;
+}
+
+/*
+-------------------------------------------------------------------------------------------------------
+Static sleep helpers
+-------------------------------------------------------------------------------------------------------
+*/
+
+#ifdef _WIN32
+// Calls TimeBeginPeriod(1) at the start of execution.
+
+Timer::precisionSleeper::precisionSleeper()
+{
+    _precise_period = true;
+    timeBeginPeriod(1);
+}
+
+// If _precise_period calls TimeEndPeriod(1) at the end of execution.
+
+Timer::precisionSleeper::~precisionSleeper()
+{
+    if(_precise_period)
+        timeEndPeriod(1);
+}
+
+// Allows for modification of sleep timer resolution during runtime.
+
+void Timer::set_sleep_timer_resolution_1ms(bool enable)
+{
+    if (!enable && precisionSleeper::_precise_period)
+    {
+        timeEndPeriod(1);
+        precisionSleeper::_precise_period = false;
+    }
+    else if (enable && !precisionSleeper::_precise_period)
+    {
+        timeBeginPeriod(1);
+        precisionSleeper::_precise_period = true;
+    }
+}
+#endif
+
+// For Windows uses CreateWaitableTimer to create an object with specific
+// lifetime and wait for it to end. For other OSes uses nanosleep.
+
+void Timer::sleep_for_us(unsigned long long us)
+{
+#ifdef _WIN32
+    HANDLE h = CreateWaitableTimerExW(nullptr, nullptr,
+        CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+
+    if (!h) 
+        return;
+
+    LARGE_INTEGER due;  // relative, 100 ns units
+    due.QuadPart = -(LONGLONG)(us * 10ULL);
+
+    BOOL ok = SetWaitableTimer(h, &due, 0, nullptr, nullptr, FALSE);
+
+    if (ok) 
+        WaitForSingleObject(h, INFINITE);
+
+    CloseHandle(h);
+    return;
+#else
+    timespec req;
+    req.tv_sec = (time_t)(us / 1000000ULL);
+    req.tv_nsec = (long)((us % 1000000ULL) * 1000ULL);
+    nanosleep(&req, nullptr);
+#endif
+}
+
+// Waits for a given amount of milliseconds.
+
+void Timer::sleep_for(unsigned long ms)
+{
+#ifdef _WIN32
+    ::Sleep(ms); // coarse (~1ms guarded by precisionSleeper)
+#else
+    timespec req;
+    req.tv_sec = (time_t)(ms / 1000UL);
+    req.tv_nsec = (long)((ms % 1000UL) * 1000000L);
+    nanosleep(&req, nullptr);
+#endif
 }

@@ -8,7 +8,7 @@ While the source file uses the intended win32 functions this header file
 is absolutely clean of anything.
 
 The thread generation is templated, so it can take any function with 
-any arbitrary amout of arguments please beware that the function needs
+any arbitrary amount of arguments please beware that the function needs
 to match the arguments provided.
 
 DISCLAIMER!! Make sure not to use references variables inside the functions
@@ -39,7 +39,7 @@ public:
     enum ExitCode : unsigned long
     {
         ENDED_SUCCESSFULLY  = 0,
-        EXCEPTION_CATCHED   = 1,
+        EXCEPTION_CAUGHT    = 1,
         THREAD_TERMINATED   = 2,
         THREAD_DETACHED     = 3,
         EXIT_CODE_INVALID   = 4,
@@ -50,14 +50,14 @@ private:
 
     bool exit_code_valid_ = false;      // Whether last_exit_code is valid
 
-    // Threads cannot be simply copied or initialized by anther thread.
+    // Threads cannot be simply copied or initialized by another thread.
 
     Thread(const Thread&) = delete;
     Thread& operator=(const Thread&) = delete;
 
     // Templated function in the format desired for Win32 API for thread creation.
-    // a void* to the function is its arguments, it returns a unsigned long,
-    // 0 if everything ok, 1 if it catched an exception.
+    // a void* to the function is its arguments, it returns an unsigned long,
+    // 0 if everything ok, 1 if it caught an exception.
 
     template<typename hFunction>
     static unsigned long _stdcall trampoline(void* pheap_func)
@@ -67,7 +67,7 @@ private:
         try { 
             (*pfunction)(); 
         } catch (...) { 
-            rc = EXCEPTION_CATCHED; 
+            rc = EXCEPTION_CAUGHT; 
         }
         delete pfunction;
         return rc;
@@ -175,7 +175,7 @@ public:
     };
     bool set_priority(const PriorityLevel level);
 
-    // Sets the logical CPU's this thread is allowed to use in your machine
+    // Sets the logical CPUs this thread is allowed to use in your machine
     // The masks are coded as 1ULL << #CPU, for example if I want this thread
     // to use CPU 0 and 2, I would write mask = (1ULL << 0) | (1ULL << 2) 
 
@@ -196,9 +196,29 @@ public:
     void*           get_native_handle() const;
     unsigned long   get_id() const;
 
+    // Static Helper Functions
+
     // Wrap current thread with a real handle (cannot be joined).
     // It can be used to generate a Thread object inside any thread.
 
     static Thread from_current();
+
+    // Waits for at least one of the threads listed to finish and returns its 
+    // position in the array, if timeout is reached returns -1.
+
+    static int waitForThreads(const Thread* const* threads, unsigned int n_threads, unsigned long timeout_ms = 0xFFFFFFFFUL);
+
+private:
+    static short wakeUpGen[256];  // Simple array to store variables for wake-up calls
+public:
+
+    // Puts the current thread to sleep until the wakeUpThreads() function is called
+    // with the same ID or the timeout ends.
+
+    static bool waitForWakeUp(unsigned char ID = 0u, unsigned long timeout_ms = 0xFFFFFFFFUL);
+    
+    // Wakes up all the threads that called the function waitForWakeUp() with the same ID.
+
+    static void wakeUpThreads(unsigned char ID = 0u);
 };
 

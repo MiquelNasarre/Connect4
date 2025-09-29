@@ -1,8 +1,6 @@
 #include "Timer.h"
 #include "Thread.h"
 #include <stdio.h>
-#include <thread>
-#include <chrono>
 
 void threadedFunction(float timediference, int* n, bool* cutoff)
 {
@@ -11,11 +9,12 @@ void threadedFunction(float timediference, int* n, bool* cutoff)
 	while (!(*cutoff))
 	{
 		while (timer.check() < timediference)
-			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+			Timer::sleep_for_us(50);
 
-		timer.reset();
+		timer.mark();
 		(*n)++;
 	}
+	Thread::waitForWakeUp();
 }
 
 int main()
@@ -23,9 +22,10 @@ int main()
 	int n = 0;
 	bool cutoff = false;
 	Thread thread;
-	thread.start_suspended(&threadedFunction, 1.f, &n, &cutoff);
+	thread.start_suspended(&threadedFunction, 0.2f, &n, &cutoff);
+	thread.set_name(L"PatataThread");
 	char c;
-	while (true)
+	while (!thread.has_finished())
 	{
 		scanf("%c", &c);
 		if (c == 'n')
@@ -34,14 +34,25 @@ int main()
 		if (c == 's')
 		{
 			cutoff = true;
-			thread.join();
+			thread.join(2000);
 			printf("%lu", thread.get_exit_code());
 		}
 
 		if (c == 'r')
 			thread.resume();
 
-		if (c == 'a')
-			return 0;
+		if (c == 'b')
+		{
+			Thread::wakeUpThreads();
+			thread.join(2000);
+			printf("%lu", thread.get_exit_code());
+		}
+
+		if (c == 'v')
+		{
+			Thread::wakeUpThreads(1);
+			thread.join(2000);
+			printf("%lu", thread.get_exit_code());
+		}
 	}
 }

@@ -1,3 +1,5 @@
+#include "Timer.h"
+#include "Timer.h"
 
 #include <Windows.h>
 #include <timeapi.h>
@@ -107,4 +109,12 @@ int Timer::getSize()
 void Timer::setMax(unsigned int max)
 {
 	MaxMarkers = max;
+}
+
+void Timer::sleep_for(unsigned long ms)
+{
+}
+
+void Timer::sleep_for_us(unsigned long long us)
+{
 }

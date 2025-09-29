@@ -1,5 +1,7 @@
-#include "Thread.h"
+ï»¿#include "Thread.h"
 #include <windows.h>
+
+#pragma comment(lib, "synchronization.lib") // For "wait for wake-up" thread implementation
 
 // THREAD CLASS SOURCE FILE
 // This file will define all the Thread.h functions 
@@ -32,7 +34,7 @@ Thread::Thread(Thread&& other) noexcept
     other.exit_code_valid_ = false;
 }
 
-// Detaches if it has a handles and
+// Detaches if it has a handle and
 // copies other's values and resets them.
 
 Thread& Thread::operator=(Thread&& other) noexcept
@@ -84,7 +86,8 @@ bool Thread::start_raw(unsigned long(__stdcall* proc)(void*), void* args)
 
 bool Thread::join(unsigned long timeout_ms)
 {
-    if (!thread_handle_) return false;
+    if (!thread_handle_ || GetCurrentThreadId() == os_thread_id_) 
+        return false;
 
     DWORD w = WaitForSingleObject((HANDLE)thread_handle_, timeout_ms);
 
@@ -114,6 +117,7 @@ void Thread::detach()
 
         last_exit_code_ = THREAD_DETACHED;
         exit_code_valid_ = true;
+        suspended = false;
     }
 }
 
@@ -126,7 +130,7 @@ bool Thread::resume()
     return thread_handle_ && ResumeThread(thread_handle_) != (DWORD)-1;
 }
 
-// If it has a handle callse SuspendThread.
+// If it has a handle calls SuspendThread.
 // Sets suspended to true for start_raw().
 
 bool Thread::suspend()
@@ -136,7 +140,7 @@ bool Thread::suspend()
 }
 
 // Hard kill (strongly discouraged). Prefer cooperative stop.
-// Its better if you enter a variable in the thread to call stop.
+// It's better if you enter a variable in the thread to call stop.
 
 bool Thread::terminate() {
     if (!thread_handle_) 
@@ -151,6 +155,8 @@ bool Thread::terminate() {
     CloseHandle((HANDLE)thread_handle_);
     thread_handle_ = nullptr;
     os_thread_id_ = 0;
+    suspended = false;
+
     return true;
 }
 
@@ -172,7 +178,7 @@ bool Thread::set_name(const wchar_t* name)
     return SUCCEEDED(pSetThreadDescription((HANDLE)thread_handle_, name));
 }
 
-// Changes the thread’s dynamic priority within the process’s priority.
+// Changes the threadâ€™s dynamic priority within the processâ€™s priority.
 
 bool Thread::set_priority(const PriorityLevel level)
 {
@@ -266,7 +272,7 @@ bool Thread::has_finished() const
     return true;
 }
 
-// If avaliable or joined recently returns exit code.
+// If available or joined recently returns exit code.
 // If not returns EXIT_CODE_INVALID.
 
 Thread::ExitCode Thread::get_exit_code() const
@@ -297,7 +303,7 @@ unsigned long Thread::get_id() const
 
 /*
 -------------------------------------------------------------------------------------------------------
-Static class functions
+Static helper functions
 -------------------------------------------------------------------------------------------------------
 */
 
@@ -312,4 +318,87 @@ Thread Thread::from_current()
         GetCurrentProcess(), &current_thread.thread_handle_, 0, FALSE, DUPLICATE_SAME_ACCESS);
     current_thread.os_thread_id_ = GetCurrentThreadId();
     return current_thread;
+}
+
+// Waits for at least one of the threads listed to finish and returns its 
+// position in the array, if timeout is reached returns -1.
+
+int Thread::waitForThreads(const Thread* const* threads, unsigned int n_threads, unsigned long timeout_ms)
+{
+    if (!threads || n_threads == 0) return -1;
+
+    // Build a compact HANDLE array with only valid (joinable) threads.
+    HANDLE hs[MAXIMUM_WAIT_OBJECTS];
+    int    map_index[MAXIMUM_WAIT_OBJECTS]; // map back to caller's index
+    unsigned count = 0;
+
+    const unsigned limit = n_threads > MAXIMUM_WAIT_OBJECTS ? MAXIMUM_WAIT_OBJECTS : n_threads;
+    for (unsigned i = 0; i < limit; ++i) {
+        const Thread* t = threads[i];
+        if (!t) 
+            continue;
+        // Your class stores handle as void*; only wait joinable handles.
+        if (t->is_joinable()) 
+        {
+            hs[count] = (HANDLE)t->get_native_handle(); // or internal handle member if available
+            map_index[count] = (int)i;
+            ++count;
+        }
+    }
+    if (count == 0) 
+        return -1;
+
+    DWORD w = WaitForMultipleObjects(count, hs, FALSE, timeout_ms);
+    if (w >= WAIT_OBJECT_0 && w < WAIT_OBJECT_0 + count) 
+    {
+        const unsigned hit = (unsigned)(w - WAIT_OBJECT_0);
+        return map_index[hit];
+    }
+
+    if (w == WAIT_TIMEOUT) 
+        return -1;
+
+    return -1;
+}
+
+// Static array declaration, used for thread wake-up calls.
+
+short Thread::wakeUpGen[256] = { 0 };
+
+// Puts the current thread to sleep until the wakeUpThreads() function is called
+// with the same ID or the timeout ends.
+
+bool Thread::waitForWakeUp(unsigned char ID, unsigned long timeout_ms)
+{
+    // Take a snapshot of the current generation.
+    const short snap = wakeUpGen[ID];
+
+    // Wait until the generation changes (edge-triggered).
+    // Must re-check in a loop to handle spurious wakes or races.
+    while(true) 
+    {
+        const BOOL ok = WaitOnAddress(
+            (volatile VOID*)&wakeUpGen[ID],
+            (PVOID)&snap,
+            sizeof(snap),
+            timeout_ms
+        );
+
+        if (wakeUpGen[ID] != snap)
+            return true; // observed a new wake
+
+        if (!ok) 
+            return false;
+        // If we were woken spuriously, loop and re-check.
+    }
+}
+
+// Wakes up all the threads that called the function waitForWakeUp() with the same ID.
+
+void Thread::wakeUpThreads(unsigned char ID)
+{
+    // Publish a new generation, then wake all waiters.
+    InterlockedIncrement16((volatile SHORT*)&wakeUpGen[ID]); // release semantics
+
+    WakeByAddressAll((PVOID)&wakeUpGen[ID]);
 }
