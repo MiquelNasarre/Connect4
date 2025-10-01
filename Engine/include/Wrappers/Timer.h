@@ -65,33 +65,30 @@ public:
 	~Timer();
 
 	// Resets history and start new timing window.
-
 	void reset();
 
 	// Pushes current time, returns seconds since previous mark.
-
 	float mark();
 
 	// Returns seconds since previous mark without modifying history.
-
 	float check();
 
 	// Advances 'last' by elapsed time (shifts existing markers forward), 
 	// practically skipping the time since last mark, returns elapsed seconds.
-
 	float skip();
+
+	// Returns the seconds since the oldest stored marker.
+	// If size_ < cap_ this will be the time since last reset.
+	float checkTotal();
 
 	// Returns average seconds per interval over the stored markers. 
 	// (0 if insufficient data, size_ < 2).
-
 	float average();
 
 	// Returns number of stored markers (size_).
-
 	unsigned int getSize();
 
 	// Sets the maximum size for the history ring.
-
 	void setMax(unsigned int max);
 
 	// Static helper class calls TimeBeginPeriod(1) and TimeEndPeriod(1).
@@ -107,8 +104,8 @@ private:
 		static precisionSleeper helper;
 	};
 public:
-	// It is set to true by default by precisionSleeper but can be modified.
 
+	// It is set to true by default by precisionSleeper but can be modified.
 	static void set_sleep_timer_resolution_1ms(bool enable);
 #endif
 

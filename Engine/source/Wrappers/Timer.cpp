@@ -178,6 +178,19 @@ float Timer::skip()
     return to_sec(dt);
 }
 
+// Returns the seconds since the oldest stored marker.
+// If size_ < cap_ this will be the time since last reset.
+
+float Timer::checkTotal()
+{
+    if (size_ < 1) return 0.0f;
+    const unsigned oldest_idx = (head_ + cap_ - (size_ - 1u)) % cap_;
+    const long long oldest_stamp = stamps_[oldest_idx];
+    const long long now = qpc_now();
+
+    return to_sec(now - oldest_stamp);
+}
+
 // Returns average seconds per interval over the stored markers. 
 // (0 if insufficient data, size_ < 2).
 

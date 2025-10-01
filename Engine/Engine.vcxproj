@@ -19,13 +19,26 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="source\main.cpp" />
-    <ClCompile Include="source\Thread.cpp" />
-    <ClCompile Include="source\Timer.cpp" />
+    <ClCompile Include="source\Engine.cpp" />
+    <ClCompile Include="source\Solver\bitSolver.cpp" />
+    <ClCompile Include="source\Solver\heuristicSolver.cpp" />
+    <ClCompile Include="source\Solver\zobrist.cpp" />
+    <ClCompile Include="source\User\Interface.cpp" />
+    <ClCompile Include="source\User\main.cpp" />
+    <ClCompile Include="source\Wrappers\Thread.cpp" />
+    <ClCompile Include="source\Wrappers\Timer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\Thread.h" />
-    <ClInclude Include="include\Timer.h" />
+    <ClInclude Include="include\Engine.h" />
+    <ClInclude Include="include\Solver\bitBoard.h" />
+    <ClInclude Include="include\Solver\bitSolver.h" />
+    <ClInclude Include="include\Solver\heuristicSolver.h" />
+    <ClInclude Include="include\Solver\heuristictt.h" />
+    <ClInclude Include="include\Solver\tt.h" />
+    <ClInclude Include="include\Solver\zobrist.h" />
+    <ClInclude Include="include\User\Interface.h" />
+    <ClInclude Include="include\Wrappers\Thread.h" />
+    <ClInclude Include="include\Wrappers\Timer.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -102,7 +115,7 @@
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)include/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)include/Wrappers;$(ProjectDir)include/Solver;$(ProjectDir)include/User</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -119,7 +132,7 @@
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)include/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)include/Wrappers;$(ProjectDir)include/Solver;$(ProjectDir)include/User</AdditionalIncludeDirectories>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
@@ -135,7 +148,7 @@
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)include/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)include/Wrappers;$(ProjectDir)include/Solver;$(ProjectDir)include/User</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -152,7 +165,7 @@
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)include/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)include/Wrappers;$(ProjectDir)include/Solver;$(ProjectDir)include/User</AdditionalIncludeDirectories>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>

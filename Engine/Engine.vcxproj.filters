@@ -12,24 +12,81 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
+    <Filter Include="Sources\Private\Solver">
+      <UniqueIdentifier>{a96d9223-a526-4f57-b560-0b95f9e95f50}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sources\Private\Wrappers">
+      <UniqueIdentifier>{a1b548f1-2fe0-4eb2-aac0-7339ef5f2ef5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sources\Public\Solver">
+      <UniqueIdentifier>{c0bf0a7b-d0ed-4b76-b0ac-1c900dfbc330}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sources\Public\Wrappers">
+      <UniqueIdentifier>{93fa018a-72bc-45c3-9c66-b1af36d865df}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sources\Public\User">
+      <UniqueIdentifier>{f1a7df1c-9924-41fd-9cb4-509b6e546e10}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sources\Private\User">
+      <UniqueIdentifier>{9b150dbb-ddb0-4ece-bf52-d29230e2aa53}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="source\main.cpp">
+    <ClCompile Include="source\Engine.cpp">
       <Filter>Sources\Private</Filter>
     </ClCompile>
-    <ClCompile Include="source\Timer.cpp">
-      <Filter>Sources\Private</Filter>
+    <ClCompile Include="source\Wrappers\Thread.cpp">
+      <Filter>Sources\Private\Wrappers</Filter>
     </ClCompile>
-    <ClCompile Include="source\Thread.cpp">
-      <Filter>Sources\Private</Filter>
+    <ClCompile Include="source\Wrappers\Timer.cpp">
+      <Filter>Sources\Private\Wrappers</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Solver\bitSolver.cpp">
+      <Filter>Sources\Private\Solver</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Solver\heuristicSolver.cpp">
+      <Filter>Sources\Private\Solver</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Solver\zobrist.cpp">
+      <Filter>Sources\Private\Solver</Filter>
+    </ClCompile>
+    <ClCompile Include="source\User\main.cpp">
+      <Filter>Sources\Private\User</Filter>
+    </ClCompile>
+    <ClCompile Include="source\User\Interface.cpp">
+      <Filter>Sources\Private\User</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\Timer.h">
+    <ClInclude Include="include\Engine.h">
       <Filter>Sources\Public</Filter>
     </ClInclude>
-    <ClInclude Include="include\Thread.h">
-      <Filter>Sources\Public</Filter>
+    <ClInclude Include="include\Solver\bitBoard.h">
+      <Filter>Sources\Public\Solver</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Solver\bitSolver.h">
+      <Filter>Sources\Public\Solver</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Solver\heuristicSolver.h">
+      <Filter>Sources\Public\Solver</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Solver\heuristictt.h">
+      <Filter>Sources\Public\Solver</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Solver\tt.h">
+      <Filter>Sources\Public\Solver</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Solver\zobrist.h">
+      <Filter>Sources\Public\Solver</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Wrappers\Thread.h">
+      <Filter>Sources\Public\Wrappers</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Wrappers\Timer.h">
+      <Filter>Sources\Public\Wrappers</Filter>
+    </ClInclude>
+    <ClInclude Include="include\User\Interface.h">
+      <Filter>Sources\Public\User</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

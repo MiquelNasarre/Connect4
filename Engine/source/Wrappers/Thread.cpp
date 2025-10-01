@@ -1,7 +1,9 @@
 ﻿#include "Thread.h"
 #include <windows.h>
+#include <cwchar>
 
 #pragma comment(lib, "synchronization.lib") // For "wait for wake-up" thread implementation
+#pragma comment(lib, "user32.lib")          // For formatted thread name
 
 // THREAD CLASS SOURCE FILE
 // This file will define all the Thread.h functions 
@@ -163,9 +165,18 @@ bool Thread::terminate() {
 // Sets the name of the thread to your provided name, which can 
 // be seen in the debugger, task manager, etc.
 
-bool Thread::set_name(const wchar_t* name)
+bool Thread::set_name(const wchar_t* fmt, ...)
 {
-    if (!thread_handle_ || !name) return false;
+    if (!thread_handle_ || !fmt) return false;
+
+    va_list ap;
+
+    // Unwrap the format
+    wchar_t stackbuf[512];
+
+    va_start(ap, fmt);
+    if (_vsnwprintf_s(stackbuf, (sizeof(stackbuf) / sizeof(stackbuf[0])), _TRUNCATE, fmt, ap) < 0) return false;
+    va_end(ap);
 
     // Available on Windows 10 Anniversary Update (1607, build 14393) and later.
     // OK to call unconditionally; returns HRESULT.
@@ -175,7 +186,7 @@ bool Thread::set_name(const wchar_t* name)
 
     if (!pSetThreadDescription) return false;
 
-    return SUCCEEDED(pSetThreadDescription((HANDLE)thread_handle_, name));
+    return SUCCEEDED(pSetThreadDescription((HANDLE)thread_handle_,stackbuf));
 }
 
 // Changes the thread’s dynamic priority within the process’s priority.

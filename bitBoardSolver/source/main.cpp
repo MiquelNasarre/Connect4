@@ -6,13 +6,13 @@
 
 int main()
 {
-    Connect4Board board;// (T6);
+    Connect4Board board; // (T2);
     //board.currentPlayer = YELLOW;
 
 //#define BIT_TREE
-//#define EVAL_TREE
+#define EVAL_TREE
 //#define PLAY
-#define LET_PLAY
+//#define LET_PLAY
 //#define BEST_PATH
 
 #ifdef BIT_TREE
@@ -80,9 +80,11 @@ int main()
     MachineAgainstMachine(board, 0.5f, 8, false);
 
 #elif defined BEST_PATH
-
+    Timer timer;
+    timer.reset();
     unsigned char* p = findBestMove(board);
-    printf("%hhu, %hhu", p[0], p[1]);
+    printf("%hhu, %hhu, %.3f", p[0], p[1], timer.check());
+
 
 #endif
 

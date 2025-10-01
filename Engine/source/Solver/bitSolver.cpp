@@ -47,47 +47,11 @@ static inline TransTable* TT = nullptr;
 //
 // ----------------------------------------------------------------------------------------------------------
 
-// This is just a tiny helper funtion very useful for reconaissance if you are doing a very big tree
-// it can cut a lot of branches off, but too expensive for any small tree.
-
-static inline SolveResult tinyAlphaBetaTree(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth)
-{
-	if (!depth)
-		return DRAW;
-
-	SolveResult best = OTHER_PLAYER_WIN;
-	for (unsigned char column : moveOrder[3])
-	{
-		if (!canPlay(board, column))
-			continue;
-
-		if (is_win(board.playerBitboard[board.sideToPlay] | bit_at(column, board.heights[column])))
-			return CURRENT_PLAYER_WIN;
-
-		playMove(board, column);
-		const SolveResult score = -tinyAlphaBetaTree(board, -beta, -alpha, depth - 1);
-		undoMove(board, column);
-
-		if (score > best)
-		{
-			best = score;
-
-			if (best > alpha)
-			{
-				alpha = best;
-				if (alpha >= beta)
-					return best;
-			}
-		}
-	}
-	return best;
-}
-
 // This is the main function of this file.
 // It solves a given position up to a certain depth, returns win, loss or draw.
 // Uses transposition tables, with best move ordering and alpha beta pruning
 
-static inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth, TransTable* TT)
+inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth, TransTable* TT)
 {
 	// First using the transposition tables we want to check if
 	// we have already encountered this position before.
@@ -109,9 +73,17 @@ static inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult
 		SolveResult score = (SolveResult)storedData->score;
 #ifdef DEPTH_TESTING
 		if (score)
+			//if (
+			//	// In this case we are in a winning position but the tree might have ommited a faster win.
+			//	!(score == CURRENT_PLAYER_WIN && beta == CURRENT_PLAYER_WIN && depth < storedData->depth) &&
+
+			//	// In this case we are in a losing position but the tree might not have identified the more resilient loss.
+			//	!(score == OTHER_PLAYER_WIN && alpha == OTHER_PLAYER_WIN && depth < storedData->depth)
+			//
+			//	) 
 			return score;
 
-		if (storedData->depth >= depth) 
+		else if (storedData->depth >= depth) 
 #endif
 			switch (storedData->flag)
 			{
@@ -134,9 +106,7 @@ static inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult
 		if (depth == 1u || board.moveCount == 63u)
 			return DRAW;
 
-		if (storedData->bestCol != 255)
-			colTT = storedData->bestCol;
-
+		colTT = storedData->bestCol;
 	}
 	else
 	{
@@ -144,27 +114,23 @@ static inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult
 		// Returns wins from our player and counts possible wins of the other player
 		// Wins are checked here so there is no need to check them anywhere else
 
+		unsigned char validCol;
 		for (unsigned char column : moveOrder[colTT])
 		{
 			if (!canPlay(board, column))
 				continue;
 
+			validCol = column;
 			const uint64_t s = bit_at(column, board.heights[column]);
 
 			if (is_win(board.playerBitboard[board.sideToPlay] | s))
-			{
-				TT[board.moveCount].store(board.hash, depth, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT, column);
-				return CURRENT_PLAYER_WIN;
-			}
+				return (SolveResult)TT[board.moveCount].store(board.hash, depth, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT, column);
 		}
 
 		// Tree cutoff
 
 		if (depth == 1u || board.moveCount == 63u)
-		{
-			TT[board.moveCount].store(board.hash, depth, DRAW, ENTRY_FLAG_EXACT);
-			return DRAW;
-		}
+			return (SolveResult)TT[board.moveCount].store(board.hash, depth, DRAW, ENTRY_FLAG_EXACT, validCol);
 	}
 
 	// Usual alphe-beta pruning recursive algorithm
@@ -192,25 +158,20 @@ static inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult
 			{
 				alpha = best;
 				if (alpha >= beta) 
-					break;
+					return (SolveResult)TT[board.moveCount].store(board.hash, depth, best, ENTRY_FLAG_LOWER, bestCol);
 			}
 		}
 	}
 
 	// Before returning it always saves the position in the TT
 
-	uint8_t ttFlag = ENTRY_FLAG_EXACT;
-	if (best >= beta) ttFlag = ENTRY_FLAG_LOWER;
-	else if (best <= alpha0) ttFlag = ENTRY_FLAG_UPPER;
-	TT[board.moveCount].store(board.hash, depth, best, ttFlag, bestCol);
-
-	return best;
+	return (SolveResult)TT[board.moveCount].store(board.hash, depth, best, (best <= alpha0) ? ENTRY_FLAG_UPPER : ENTRY_FLAG_EXACT, bestCol);
 }
 
 // Solves the given board position up to a certain depth.
 // It checks the validity of the board and then initializes the alpha-beta pruning tree.
 
-SolveResult solveBoard(const Board& initialBoard, unsigned char depth, bool clearTT)
+SolveResult solveBoard(const Board& initialBoard, unsigned char depth, TransTable* givenTT)
 {
 	if (!Z_PIECE[0][0])
 		init_zobrist();
@@ -229,16 +190,14 @@ SolveResult solveBoard(const Board& initialBoard, unsigned char depth, bool clea
 	if (depth > 64 - board.moveCount)
 		depth = 64 - board.moveCount;
 
-	if(!TT)
-		TT = (TransTable*)calloc(64, sizeof(TransTable));
+	TransTable*		usingTT;
+	if (givenTT)	usingTT = givenTT;
+	else if (TT)	usingTT = TT;
+	else			usingTT = (TT = (TransTable*)calloc(64, sizeof(TransTable)));
 
 	for (int d = board.moveCount; d < board.moveCount + depth; d++)
-		if (!TT[d].is_init())
-			TT[d].init();
-	
-	if (clearTT)
-		for (unsigned char d = 0; d < 64; d++)
-			TT[d].clear();
+		if (!usingTT[d].is_init())
+			usingTT[d].init();
 
 	return exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, TT);
 }
@@ -246,32 +205,38 @@ SolveResult solveBoard(const Board& initialBoard, unsigned char depth, bool clea
 // Same as the previous one but assumes validity checks have been done.
 // Used for win checks on bigger heuristic trees.
 
-SolveResult noChecksSolveBoard(const Board& initialBoard, unsigned char depth)
+SolveResult noChecksSolveBoard(const Board& initialBoard, unsigned char depth, TransTable* givenTT)
 {
 	Board board = initialBoard;
 
 	if (depth > 64 - board.moveCount)
 		depth = 64 - board.moveCount;
 
-	if(!TT)
-		TT = (TransTable*)calloc(64, sizeof(TransTable));
+	TransTable*		usingTT;
+	if (givenTT)	usingTT = givenTT;
+	else if (TT)	usingTT = TT;
+	else			usingTT = (TT = (TransTable*)calloc(64, sizeof(TransTable)));
 
 	for (int d = board.moveCount; d < board.moveCount + depth; d++)
-		if (!TT[d].is_init())
-			TT[d].init();
+		if (!usingTT[d].is_init())
+			usingTT[d].init();
 
-	return exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, TT);
+	return exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, usingTT);
 }
 
 // If the position is stored on the transposition table it retrieves the best column.
 // if the position is a mate situation it does not guarantee best path.
 
-unsigned char retrieveColumn(const Board& board)
+unsigned char retrieveColumn(const Board& board, TransTable* givenTT)
 {
-	if (!TT || !TT[board.moveCount].is_init())
+	TransTable*		usingTT;
+	if (!givenTT)	usingTT = TT;
+	else			usingTT = givenTT;
+
+	if (!usingTT || !usingTT[board.moveCount].is_init())
 		return 255;
 
-	TTEntry* entry = TT[board.moveCount].storedBoard(board.hash);
+	TTEntry* entry = usingTT[board.moveCount].storedBoard(board.hash);
 
 	if (!entry)
 		return 255;
@@ -284,89 +249,48 @@ unsigned char retrieveColumn(const Board& board)
 // For the losing player is the one that delays the loss the longest.
 // First value is the column second value is the distance.
 
-unsigned char* findBestPath(const Board& board)
+unsigned char* findBestPath(const Board& board, SolveResult WhoWins, bool* stop)
 {
 	Board b = board;
 
-	TransTable* TTtemp = (TransTable*)calloc(64, sizeof(TransTable));
+	TransTable* TTtemp = new TransTable[64];
 
 	SolveResult result = DRAW;
 	unsigned char depth = 0u;
 	while (!result)
 	{
+		if (stop && *stop)
+		{
+			delete[] TTtemp;
+			return nullptr;
+		}
+
 		depth++;
 		for (int d = board.moveCount; d < board.moveCount + depth; d++)
 			if (!TTtemp[d].is_init())
 				TTtemp[d].init();
 
-		result = exactTree(b, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, TTtemp);
+		switch (WhoWins)
+		{
+		case CURRENT_PLAYER_WIN:
+			result = exactTree(b, DRAW, CURRENT_PLAYER_WIN, depth, TTtemp);
+			break;
+
+		case OTHER_PLAYER_WIN:
+			result = exactTree(b, OTHER_PLAYER_WIN, DRAW, depth, TTtemp);
+			break;
+
+		default:
+			delete[] TTtemp;
+			return nullptr;
+		}
+		
 	}
+
 	unsigned char* solution = (unsigned char*)calloc(2, sizeof(char));
 	solution[0] = TTtemp[board.moveCount].storedBoard(board.hash)->bestCol;
 	solution[1] = depth;
 
-	for (int d = board.moveCount; d < board.moveCount + depth; d++)
-		if (TTtemp[d].is_init())
-			TTtemp[d].erase();
-	free(TTtemp);
-
-	return solution;
-}
-
-unsigned char* findWinningPath(const Board& board)
-{
-	Board b = board;
-
-	TransTable* TTtemp = (TransTable*)calloc(64, sizeof(TransTable));
-
-	SolveResult result = DRAW;
-	unsigned char depth = 0u;
-	while (!result)
-	{
-		depth++;
-		for (int d = board.moveCount; d < board.moveCount + depth; d++)
-			if (!TTtemp[d].is_init())
-				TTtemp[d].init();
-
-		result = exactTree(b, DRAW, CURRENT_PLAYER_WIN, depth, TTtemp);
-	}
-	unsigned char* solution = (unsigned char*)calloc(2, sizeof(char));
-	solution[0] = TTtemp[board.moveCount].storedBoard(board.hash)->bestCol;
-	solution[1] = depth;
-
-	for (int d = board.moveCount; d < board.moveCount + depth; d++)
-		if (TTtemp[d].is_init())
-			TTtemp[d].erase();
-	free(TTtemp);
-
-	return solution;
-}
-
-unsigned char* findLosingPath(const Board& board)
-{
-	Board b = board;
-
-	TransTable* TTtemp = (TransTable*)calloc(64, sizeof(TransTable));
-
-	SolveResult result = DRAW;
-	unsigned char depth = 0u;
-	while (!result)
-	{
-		depth++;
-		for (int d = board.moveCount; d < board.moveCount + depth; d++)
-			if (!TTtemp[d].is_init())
-				TTtemp[d].init();
-
-		result = exactTree(b, OTHER_PLAYER_WIN, DRAW, depth, TTtemp);
-	}
-	unsigned char* solution = (unsigned char*)calloc(2, sizeof(char));
-	solution[0] = TTtemp[board.moveCount].storedBoard(board.hash)->bestCol;
-	solution[1] = depth;
-
-	for (int d = board.moveCount; d < board.moveCount + depth; d++)
-		if (TTtemp[d].is_init())
-			TTtemp[d].erase();
-	free(TTtemp);
-
+	delete[] TTtemp;
 	return solution;
 }

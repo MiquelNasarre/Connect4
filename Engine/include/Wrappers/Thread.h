@@ -18,6 +18,14 @@ You should use pointers instead for shared variables between threads.
 -------------------------------------------------------------------------------------------------------
 */
 
+// Macros for set_affinity()
+
+#define CPU0 0x01ULL // Mask to refer to CPU0 when setting affinity
+#define CPU1 0x02ULL // Mask to refer to CPU1 when setting affinity
+#define CPU2 0x04ULL // Mask to refer to CPU2 when setting affinity
+#define CPU3 0x08ULL // Mask to refer to CPU3 when setting affinity
+
+
 // Definition of the class, everything in this header is contained inside the class Thread.
 // A thread object can be generated anywhere in your code, and a different thread can be
 // created by simply calling the function start(*function, function args...).
@@ -161,7 +169,7 @@ public:
     // Sets the name of the thread to your provided name, which can 
     // be seen in the debugger, task manager, etc.
 
-    bool set_name(const wchar_t* name);
+    bool set_name(const wchar_t* name, ...);
 
     // Changes the thread’s dynamic priority within the process’s priority.
 
