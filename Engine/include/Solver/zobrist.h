@@ -19,12 +19,10 @@ Macros for Zobrist generation
 
 // The initial hash is the hash value of an empty board.
 // This is important otherwise the initial board hash would be 0.
-
 #define INITIAL_HASH 0x89B84566FD5845A4ULL
 
 // This seed is a random number used to generate the zobrist values.
 // It can be modified with no problem.
-
 #define ZOBRIST_SEED 0x9E3779B97F4A7C15ULL
 
 /*
@@ -33,17 +31,14 @@ Generation of Zobrist Values for each color and position
 -------------------------------------------------------------------------------------------------------
 */
 
-// This variable will store all the zobrist values upon initializing.
-
+// This variable stores all the zobrist values upon initializing.
 extern uint64_t Z_PIECE[2][64];
 
 // Initializes the Zobrist values with the seed provided using a simple mixer algorithm.
-
 extern void init_zobrist(uint64_t seed = ZOBRIST_SEED);
 
 // Computes the board hash.
 // It is quite an expensive function so it is only used for board validity checks.
-
 static inline uint64_t boardHash(const uint64_t playerBitboards[2])
 {
     uint64_t hash = INITIAL_HASH;

@@ -2,7 +2,7 @@
 #include "bitBoard.h"
 #include "tt.h"
 
-/* ABSOLUTE TREE SOLVING FUNTIONS HEADER FILE
+/* EXACT TREE SOLVING FUNTIONS HEADER FILE
 -------------------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------------------
 This header includes functions to solve board positions up to 

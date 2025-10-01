@@ -24,7 +24,6 @@ Constants and enums for the Connect4 bitboard
 
 // Possible results of the solver.
 // The set values are important to simplify minimax algorithm.
-
 enum SolveResult : char
 {
 	CURRENT_PLAYER_WIN		=  1,
@@ -36,7 +35,6 @@ enum SolveResult : char
 };
 
 // Simple operator to avoid stuffing the code with type casts.
-
 inline SolveResult operator-(const SolveResult& other)
 {
 	return (SolveResult)-(char)other;
@@ -103,21 +101,18 @@ Helper inline functions to cleanup the code
 */
 
 // Returns the board of both player pieces combined.
-
 static inline uint64_t mask(const Board& board)
 {
 	return board.playerBitboard[0] | board.playerBitboard[1];
 }
 
 // Check if the column is not full.
-
 static inline bool canPlay(const Board& board, const unsigned char column)
 {
 	return board.heights[column] ^ 8u;
 }
 
 // Returns a bit located at a given position in the board.
-
 static inline uint64_t bit_at(const unsigned char column, const unsigned char row)
 {
 	return 0x1ULL << (column * 8 + row);
@@ -132,7 +127,6 @@ In game functions for board operations
 // Checks if the board is valid by checking if there are any floating pieces,
 // if the hash of the board corresponds with the one it is supposed to be,
 // and if the move count matches the pieces on the board.
-
 static inline bool invalidBoard(const Board& board)
 {
 	unsigned char moveCount = 0;
@@ -166,7 +160,6 @@ static inline bool invalidBoard(const Board& board)
 
 // Places a stone for side-to-move in column c (assumes can_play was true).
 // Updates board hash and switches player at the end of the move.
-
 static inline void playMove(Board& board, const unsigned char column)
 {
 	const uint8_t row = board.heights[column]++;
@@ -181,7 +174,6 @@ static inline void playMove(Board& board, const unsigned char column)
 
 // Switches player back to previous move and ndoes hash changes.
 // Removes last stone placed in that column (assumes it was played by the correct player).
-
 static inline void undoMove(Board& board, const unsigned char column)
 {
 	board.sideToPlay ^= 1; // untoggle side to move
@@ -199,7 +191,6 @@ static inline void undoMove(Board& board, const unsigned char column)
 // then only the bits that are set 4 times in a row will remain.
 // This allows checking for all same type wins in a single operation.
 // Then masks are used to filter out cross border connect4's.
-
 inline bool is_win(const uint64_t playerBitboard) 
 {
 	uint64_t m;

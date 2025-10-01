@@ -16,13 +16,12 @@ this funtions will return the SolveEval struct, with the values listed below.
 // the column that gives this best result for the current player,
 // the depth that this position was evaluated
 // and a flag that represents the state of the game.
-
 struct SolveEval
 {
-	float eval;
-	unsigned char column;
-	unsigned char depth;
-	SolveResult flag;
+	float eval;				// Value from -1 to 1 represents the evaluation for the current player
+	unsigned char column;	// The best column to play for the current player
+	unsigned char depth;	// Depth at which this position has been evaluated
+	SolveResult flag;		// Indicates what kind of position is evaluated
 };
 
 // This is the main function of the heuristic solver, computing the tree to solve the position to a
@@ -36,16 +35,13 @@ struct SolveEval
 //
 // Use of this function in particular is only intended for direct interaction by engines.
 // For user-end use is safer to use the other functions.
-
 extern inline float heuristicTree(Board& board, float alpha, float beta, unsigned char depth, unsigned char bitDepth, HeuristicTransTable* HTT, TransTable* TT = nullptr, bool* stop = nullptr);
 
 // This will return all the information above after processing a tree of the board to a given depth.
 // Every heuristic function call will check for wins using the bitSoler to a given bitDepth.
-
 extern SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned char bitDepth, HeuristicTransTable* HTT = nullptr, TransTable* TT = nullptr);
 
 // Evaluates the given board with Iterative Deepening using the evaluateBoard funtion
 // until a certain time threshold is reached or it finds a win.
 // Then it returns the deepest evaluation computed.
-
 extern SolveEval evaluateBoardTime(const Board& initialBoard, float Max_time, unsigned char bitDepth, HeuristicTransTable* HTT = nullptr, TransTable* TT = nullptr);

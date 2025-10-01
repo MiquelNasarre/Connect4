@@ -1,6 +1,28 @@
 #pragma once
 
+/* CONNECT4 THREADING ENGINE HEADER FILE
+-------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
+This header contains the engine to evaluate Connect4 positions.
+It encapsulates all the functions from the other files, and threads
+the tree generation to allow for continous computation as well as 
+multiple threads computing a position at the same time.
+
+Its main tool is the heuristicTree which is used at increasing depths
+to solve a given position. Currently the threads compute the same 
+position at different depths. Ideally in the future every thread 
+will compute a diferent part of the tree.
+-------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------
+*/
+
 #define UNLIMITED_DEPTH 255u
+
+/*
+-------------------------------------------------------------------------------------------------------
+Other relevant structs to use the engine
+-------------------------------------------------------------------------------------------------------
+*/
 
 // Struct that defines a Connect4 board. It stores the board configuration
 // and the current side to play. 1 is player RED, 2 is player YELLOW.
@@ -30,6 +52,7 @@ struct PositionEval
 	unsigned char depth;	// Depth at which the position was evalued 
 							// If the position is win/loss, depth is the distance with perfect play
 
+	// Reflects the state of the positon, invalid board means the board data is not being stored.
 	enum EvalFlag : char
 	{
 		CURRENT_PLAYER_WIN = 1,
@@ -39,8 +62,14 @@ struct PositionEval
 		CURRENT_PLAYER_BETTER = 2,
 		OTHER_PLAYER_BETTER = 3,
 
-	} flag = INVALID_BOARD;	// Reflects the state of the positon, invalid board means the board data is not being stored.
+	} flag = INVALID_BOARD;	
 };
+
+/*
+-------------------------------------------------------------------------------------------------------
+Engine class
+-------------------------------------------------------------------------------------------------------
+*/
 
 // Core class of Engine.h. It continuously evaluates a Connect4 position.
 // The evaluation is threaded, while it computes you can perform any other task.
@@ -70,6 +99,12 @@ private:
 	// No copies of an Engine are allowed.
 	EngineConnect4& operator=(const EngineConnect4&) = delete;
 
+/*
+-------------------------------------------------------------------------------------------------------
+Constructors/Destructors
+-------------------------------------------------------------------------------------------------------
+*/
+
 public:
 	// Constructor, it calls the main loop to start analizing the position.
 	// If no position is provided it will default to initial position. If it
@@ -86,14 +121,11 @@ public:
 	// Destructor, calls kill_main_loop and frees the allocated data.
 	~EngineConnect4();
 
-#ifdef BIT_BOARD
-	// It takes a bitBoard and returns the equivalent Connect4 struct.
-	static Connect4 decodeBoard(const Board& bitBoard);
-
-	// It takes a Connect4 strunc and returns the equivalent bitBoard.
-	// If the board position is invalid it returns nullptr.
-	static Board* translateBoard(const Connect4& position);
-#endif
+/*
+-------------------------------------------------------------------------------------------------------
+User end functions
+-------------------------------------------------------------------------------------------------------
+*/
 
 	// New evaluation trees will not be called in the main loop.
 	// Current evaluation trees will be allowed to finish.
@@ -133,5 +165,21 @@ public:
 	// Returns a Board struct copy of the current position under evaluation.
 	Board getCurrentBitBoard() const;
 #endif
+
+/*
+-------------------------------------------------------------------------------------------------------
+Static helpers
+-------------------------------------------------------------------------------------------------------
+*/
+
+#ifdef BIT_BOARD
+	// It takes a bitBoard and returns the equivalent Connect4 struct.
+	static Connect4 decodeBoard(const Board& bitBoard);
+
+	// It takes a Connect4 strunc and returns the equivalent bitBoard.
+	// If the board position is invalid it returns nullptr.
+	static Board* translateBoard(const Connect4& position);
+#endif
+
 
 };

@@ -71,7 +71,7 @@ inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, 
 	if (storedData)
 	{
 		SolveResult score = (SolveResult)storedData->score;
-#ifdef DEPTH_TESTING
+
 		if (score)
 			//if (
 			//	// In this case we are in a winning position but the tree might have ommited a faster win.
@@ -84,7 +84,6 @@ inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, 
 			return score;
 
 		else if (storedData->depth >= depth) 
-#endif
 			switch (storedData->flag)
 			{
 			case ENTRY_FLAG_EXACT: // Exact value known

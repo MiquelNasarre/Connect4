@@ -142,28 +142,28 @@ Struct of data shared between threads stored in *threadedData
 -------------------------------------------------------------------------------------------------------
 */
 
+// Struct use throughout the entire class to share information
+// with the threads, it created upon construction and stored 
+// as a void* threadedData.
+//
+// Contains simple bools for comunication, the main loop thread
+// some constants, the transposition tables and the board position.
 struct DATA
 {
-	Board currentBoard = {};
+	Board currentBoard = {};					// Current board under evaluation
+	unsigned char first_player = 0;				// Stores initial board parity
 
-	Thread* main_loop_thread = nullptr;
+	Thread* main_loop_thread = nullptr;			// Main loop thread handle
 
-	TransTable* TT = nullptr;
-	HeuristicTransTable* HTT = nullptr;
+	TransTable* TT = nullptr;					// Transposition table for exactTree
+	HeuristicTransTable* HTT = nullptr;			// Transposition table for heuristicTree
 
-	bool suspended = false;
-	bool terminate = false;
+	bool suspended = false;						// Comunicator bool to suspend main loop
+	bool terminate = false;						// Comunicator bool to terminate main loop
+	bool solution_found = false;				// Comunicator bool to anounce solved board
+	bool updatedBoard = false;					// Comunicator bool to anounce an new board
 
-	bool updatedBoard = false;
-
-	unsigned char first_player = 0;
-
-	bool solution_found = false;
-
-	unsigned char maxDepth = UNLIMITED_DEPTH;
-
-	bool updated_n_workers = false;
-	unsigned char n_workers = N_WORKERS;
+	unsigned char maxDepth = UNLIMITED_DEPTH;	// Stores the max depth allowed to compute
 };
 
 /*
@@ -171,6 +171,8 @@ struct DATA
 Static helper functions
 -------------------------------------------------------------------------------------------------------
 */
+
+// It takes a bitBoard and returns the equivalent Connect4 struct.
 
 inline Connect4 EngineConnect4::decodeBoard(const Board& bitBoard)
 {
@@ -189,6 +191,9 @@ inline Connect4 EngineConnect4::decodeBoard(const Board& bitBoard)
 
 	return board;
 }
+
+// It takes a Connect4 strunc and returns the equivalent bitBoard.
+// If the board position is invalid it returns nullptr.
 
 inline Board* EngineConnect4::translateBoard(const Connect4& position)
 {
@@ -228,6 +233,9 @@ inline Board* EngineConnect4::translateBoard(const Connect4& position)
 	}
 	return board;
 }
+
+// Takes a transposition table entry and returns the corresponding
+// position evaluation. If the entry data is not exact returns invalid.
 
 static inline PositionEval obtainPosEvalFromEntry(HTTEntry* e)
 {
@@ -311,10 +319,16 @@ Main Loop functions
 -------------------------------------------------------------------------------------------------------
 */
 
+// This is the core of the engine, will be running from creation to
+// destruction and will be multithreading to evaluate the current 
+// position set by the constructor or updatePosition().
+
 void EngineConnect4::main_loop() const
 {
 	init_zobrist();
 	DATA* data = (DATA*)threadedData;
+
+	// Worker struct that envelops worker threads for the main loop.
 
 	struct Worker
 	{
@@ -408,6 +422,8 @@ void EngineConnect4::main_loop() const
 		w.sleep();
 }
 
+// Function used to call terminate on the main loop and join it.
+
 void EngineConnect4::kill_main_loop() const
 {
 	DATA* data = (DATA*)threadedData;
@@ -420,6 +436,16 @@ void EngineConnect4::kill_main_loop() const
 
 	return;
 }
+
+/*
+-------------------------------------------------------------------------------------------------------
+Constructor/Destructor functions
+-------------------------------------------------------------------------------------------------------
+*/
+
+// Constructor, it calls the main loop to start analizing the position.
+// If no position is provided it will default to initial position. If it
+// started suspended, resume needs to be called to start evaluating.
 
 EngineConnect4::EngineConnect4(const Connect4* position, bool start_suspended)
 {
@@ -456,6 +482,10 @@ EngineConnect4::EngineConnect4(const Connect4* position, bool start_suspended)
 	thread->set_name(L"Engine Main Loop");
 }
 
+// Constructor, it calls the main loop to start analizing the board.
+// If no board is provided it will default to initial position. If it
+// started suspended, resume needs to be called to start evaluating.
+
 EngineConnect4::EngineConnect4(const Board* board, bool start_suspended)
 {
 	threadedData = (void*)new DATA;
@@ -486,6 +516,8 @@ EngineConnect4::EngineConnect4(const Board* board, bool start_suspended)
 	thread->set_name(L"Engine Main Loop");
 }
 
+// Destructor, calls kill_main_loop and frees the allocated data.
+
 EngineConnect4::~EngineConnect4()
 {
 	kill_main_loop();
@@ -498,11 +530,24 @@ EngineConnect4::~EngineConnect4()
 	delete data;
 }
 
+/*
+-------------------------------------------------------------------------------------------------------
+User functions for using the engine
+-------------------------------------------------------------------------------------------------------
+*/
+
+// New evaluation trees will not be called in the main loop.
+// Current evaluation trees will be allowed to finish.
+
 void EngineConnect4::suspend() const
 {
 	DATA* data = (DATA*)threadedData;
 	data->suspended = true;
 }
+
+// Allows the continuation of the main loop.
+// If an engine has started suspended, resume has to be called
+// for it to begin evaluating the position.
 
 void EngineConnect4::resume() const
 {
@@ -514,6 +559,9 @@ void EngineConnect4::resume() const
 	data->suspended = false;
 	Thread::wakeUpThreads(CALL_MAINLOOP);
 }
+
+// Sends a new position to the engine that will be called for evaluation.
+// Returns true if updated correctly, returns false if invalid position.
 
 bool EngineConnect4::update_position(const Connect4* newPosition)
 {
@@ -553,6 +601,9 @@ bool EngineConnect4::update_position(const Connect4* newPosition)
 	return true;
 }
 
+// Sends a new position to the engine that will be called for evaluation.
+// Returns true if updated correctly, returns false if invalid position.
+
 bool EngineConnect4::update_position(const Board* board)
 {
 	DATA* data = (DATA*)threadedData;
@@ -585,6 +636,9 @@ bool EngineConnect4::update_position(const Board* board)
 	return true;
 }
 
+// If the position is in memory it will return a PositionEval for that position.
+// If it is not in memory EvalFlag will be INVALID_BOARD.
+
 PositionEval EngineConnect4::getPositionEval(const Connect4* position) const
 {
 	DATA* data = (DATA*)threadedData;
@@ -604,6 +658,9 @@ PositionEval EngineConnect4::getPositionEval(const Connect4* position) const
 	return PositionEval();
 }
 
+// The introduces position is introduced and will not return a PositionEval until the 
+// depth of the evaluation is at least the specified or the position is solved.
+
 PositionEval EngineConnect4::EvalAtDepth(unsigned char heuristicDept, const Connect4* position)
 {
 	DATA* data = (DATA*)threadedData;
@@ -621,6 +678,9 @@ PositionEval EngineConnect4::EvalAtDepth(unsigned char heuristicDept, const Conn
 	return obtainPosEvalFromEntry(e);
 }
 
+// Sets a depth limit for the board evaluation, by default it will take no limit and
+// evaluate until the position is solved, it is suspended or the engine is destroyed.
+
 void EngineConnect4::setMaxDepth(unsigned char heuristicDepth) const
 {
 	DATA* data = (DATA*)threadedData;
@@ -633,10 +693,14 @@ void EngineConnect4::setMaxDepth(unsigned char heuristicDepth) const
 
 }
 
+// Returns a Connect4 struct copy of the current position under evaluation.
+
 Connect4 EngineConnect4::getCurrentPosition() const
 {
 	return decodeBoard(((DATA*)threadedData)->currentBoard);
 }
+
+// Returns a Board struct copy of the current position under evaluation.
 
 Board EngineConnect4::getCurrentBitBoard() const
 {

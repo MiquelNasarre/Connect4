@@ -1,5 +1,4 @@
 #include "heuristicSolver.h"
-#include "heuristictt.h"
 #include "bitSolver.h"
 #include "Timer.h"
 

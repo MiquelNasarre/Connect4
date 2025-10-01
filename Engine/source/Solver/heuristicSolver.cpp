@@ -3,8 +3,6 @@
 #include "bitSolver.h"
 #include "Timer.h"
 
-#include <stdio.h>
-
 #include <bit>
 
 #define YOU_WIN 1.f

@@ -18,11 +18,6 @@ Macros for TTs
 -------------------------------------------------------------------------------------------------------
 */
 
-// Depth testing is for when you have multiple trees sharing TT at different depths.
-// You should only diactivate it when only using bitSolver.h for single trees.
-
-#define DEPTH_TESTING
-
 // Number of entries that will be created by defaul in a transposition table.
 // 
 // The solver generates a TT for every moveCount that it analises. That way it avoids 
@@ -147,13 +142,10 @@ public:
     {
         TTEntry* e = probe(key);
         
-#ifdef DEPTH_TESTING
         // If keys are different or you are deeper
         if (depth >= e->depth || e->key != key)
-#endif
             *e = TTEntry{ key, depth, score, flag, bestCol };
 
-#ifdef DEPTH_TESTING
         //// If both paths win but yours is faster
         //else if (score == CURRENT_PLAYER_WIN && e->score == CURRENT_PLAYER_WIN)
         //    *e = TTEntry{ key, depth, score, flag, bestCol };
@@ -167,7 +159,6 @@ public:
         //else if (score > OTHER_PLAYER_WIN && e->score == OTHER_PLAYER_WIN)
         //    *e = TTEntry{ key, e->depth, OTHER_PLAYER_WIN, ENTRY_FLAG_EXACT, bestCol };
 
-#endif
         return score;
     }
 };
