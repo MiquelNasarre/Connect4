@@ -26,7 +26,7 @@ extern void fancyPrintBoard(const Connect4Board& board);
 
 extern void playAgainstMachine(const Connect4Board board, const Player YourPlayer, unsigned char depth, unsigned char bitDepth, bool increase_depth);
 
-extern void MachineAgainstMachine(const Connect4Board board, float Max_time, unsigned char bitDepth, bool clear_screen = true);
+extern char MachineAgainstMachine(const Connect4Board board, float Max_time, unsigned char bitDepth, unsigned char heuristic_pR, unsigned char heuristic_pY, bool clear_screen = true);
 
 extern float evaluatePosition(const Connect4Board& board, unsigned char depth, unsigned char bitDepth);
 

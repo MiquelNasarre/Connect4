@@ -67,5 +67,8 @@
     <ClInclude Include="include\testBoards.h">
       <Filter>Sources\Public\interface</Filter>
     </ClInclude>
+    <ClInclude Include="include\mask.h">
+      <Filter>Sources\Public</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

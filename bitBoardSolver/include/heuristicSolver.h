@@ -1,5 +1,6 @@
 #pragma once
 #include "bitBoard.h"
+#include "heuristictt.h"
 
 /* HEURISTIC TREE SOLVING FUNTIONS HEADER FILE
 -------------------------------------------------------------------------------------------------------
@@ -26,10 +27,10 @@ struct SolveEval
 // This will return all the information above after processing a tree of the board to a given depth.
 // Every heuristic function call will check for wins using the bitSoler to a given bitDepth.
 
-extern SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned char bitDepth);
+extern SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned char bitDepth, unsigned char heuristic, HeuristicTransTable* HTT = nullptr);
 
 // Evaluates the given board with Iterative Deepening using the evaluateBoard funtion
 // until a certain time threshold is reached or it finds a win.
 // Then it returns the deepest evaluation computed.
 
-extern SolveEval evaluateBoardTime(const Board& initialBoard, float Max_time, unsigned char bitDepth);
+extern SolveEval evaluateBoardTime(const Board& initialBoard, float Max_time, unsigned char bitDepth, unsigned char heuristic);

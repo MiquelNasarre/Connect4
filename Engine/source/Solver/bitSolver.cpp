@@ -256,7 +256,7 @@ unsigned char* findBestPath(const Board& board, SolveResult WhoWins, bool* stop)
 
 	SolveResult result = DRAW;
 	unsigned char depth = 0u;
-	while (!result)
+	while (!result && depth + board.moveCount < 64)
 	{
 		if (stop && *stop)
 		{

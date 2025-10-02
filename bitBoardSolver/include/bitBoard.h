@@ -1,5 +1,6 @@
 #pragma once
 #include "zobrist.h"
+#include "mask.h"
 
 /* CONNECT4 BITBOARD HEADER FILE
 -------------------------------------------------------------------------------------------------------
@@ -39,35 +40,6 @@ inline SolveResult operator-(const SolveResult& other)
 {
 	return (SolveResult)-(char)other;
 }
-
-// Masks for any given column or row.
-
-inline constexpr uint64_t Column0 = 0x00000000000000FFULL; // Mask for the column 0
-inline constexpr uint64_t Column1 = 0x000000000000FF00ULL; // Mask for the column 1
-inline constexpr uint64_t Column2 = 0x0000000000FF0000ULL; // Mask for the column 2
-inline constexpr uint64_t Column3 = 0x00000000FF000000ULL; // Mask for the column 3
-inline constexpr uint64_t Column4 = 0x000000FF00000000ULL; // Mask for the column 4
-inline constexpr uint64_t Column5 = 0x0000FF0000000000ULL; // Mask for the column 5
-inline constexpr uint64_t Column6 = 0x00FF000000000000ULL; // Mask for the column 6
-inline constexpr uint64_t Column7 = 0xFF00000000000000ULL; // Mask for the column 7
-
-#define COL_MASK(c) (Column0 << ((c) * 8)) // Macro to get the mask for a given column
-
-inline constexpr uint64_t Row0 = 0x0101010101010101ULL; // Mask for the row 0
-inline constexpr uint64_t Row1 = 0x0202020202020202ULL; // Mask for the row 1
-inline constexpr uint64_t Row2 = 0x0404040404040404ULL; // Mask for the row 2
-inline constexpr uint64_t Row3 = 0x0808080808080808ULL; // Mask for the row 3
-inline constexpr uint64_t Row4 = 0x1010101010101010ULL; // Mask for the row 4
-inline constexpr uint64_t Row5 = 0x2020202020202020ULL; // Mask for the row 5
-inline constexpr uint64_t Row6 = 0x4040404040404040ULL; // Mask for the row 6
-inline constexpr uint64_t Row7 = 0x8080808080808080ULL; // Mask for the row 7
-
-// Masks used to check for winning positions.
-
-inline constexpr uint64_t collapseSW = 0x0000001F1F1F1F1FULL; // To check win in diagonals collapsed SW
-inline constexpr uint64_t collapseSE = 0x1F1F1F1F1F000000ULL; // To check win in diagonals collapsed SE
-inline constexpr uint64_t collapseE  = 0xFFFFFFFFFF000000ULL; // To check win in horozontal collapsed E
-inline constexpr uint64_t collapseS  = 0x1F1F1F1F1F1F1F1FULL; // To check win in vertical collapsed S
 
 /*
 -------------------------------------------------------------------------------------------------------
@@ -203,20 +175,20 @@ inline bool is_win(const uint64_t playerBitboard)
 	uint64_t m;
 
 	// Horizontal (east = -8)
-	m = playerBitboard & (playerBitboard << 8);
-	if (m & (m << 16) & collapseE) return true;
+	m = playerBitboard & SHIFT_EAST(playerBitboard);
+	if (m & SHIFT_2_EAST(m) & MASK_3E) return true;
 
 	// Vertical (south = +1)
-	m = playerBitboard & (playerBitboard >> 1);
-	if (m & (m >> 2) & collapseS) return true;
+	m = playerBitboard & SHIFT_SOUTH(playerBitboard);
+	if (m & SHIFT_2_SOUTH(m) & MASK_3S) return true;
 
 	// Diagonal SW (+9)
-	m = playerBitboard & (playerBitboard >> 9);
-	if (m & (m >> 18) & collapseSW) return true;
+	m = playerBitboard & SHIFT_SW(playerBitboard);
+	if (m & SHIFT_2_SW(m) & MASK_3SW) return true;
 
 	// Diagonal SE (-7)
-	m = playerBitboard & (playerBitboard << 7);
-	if (m & (m << 14) & collapseSE) return true;
+	m = playerBitboard & SHIFT_SE(playerBitboard);
+	if (m & SHIFT_2_SE(m) & MASK_3SE) return true;
 
 	return false;
 }

@@ -3,6 +3,6 @@
 
 int main()
 {
-	playAgainstEngine(1.f, Connect4(), 1, true);
+	playAgainstEngine(5.f, Connect4(), 2, true);
 	return 0;
 }

@@ -32,6 +32,7 @@
     <ClInclude Include="include\heuristicSolver.h" />
     <ClInclude Include="include\heuristictt.h" />
     <ClInclude Include="include\Interface.h" />
+    <ClInclude Include="include\mask.h" />
     <ClInclude Include="include\testBoards.h" />
     <ClInclude Include="include\Timer.h" />
     <ClInclude Include="include\tt.h" />

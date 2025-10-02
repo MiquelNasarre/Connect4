@@ -209,7 +209,7 @@ void playAgainstMachine(const Connect4Board board, const Player YourPlayer, unsi
 		else
 		{
 			timer.reset();
-			SolveEval eval = evaluateBoard(bitBoard, depth, bitDepth);
+			SolveEval eval = evaluateBoard(bitBoard, depth, bitDepth, 0);
 			float time = timer.check();
 
 			system("cls");
@@ -262,7 +262,7 @@ void playAgainstMachine(const Connect4Board board, const Player YourPlayer, unsi
 		printf("\nThe game has ended in a draw\n");
 }
 
-void MachineAgainstMachine(const Connect4Board board, float Max_time, unsigned char bitDepth, bool clear_screen)
+char MachineAgainstMachine(const Connect4Board board, float Max_time, unsigned char bitDepth, unsigned char heuristic_pR, unsigned char heuristic_pY, bool clear_screen)
 {
 	Timer timer;
 
@@ -276,7 +276,23 @@ void MachineAgainstMachine(const Connect4Board board, float Max_time, unsigned c
 	{
 
 		timer.reset();
-		SolveEval eval = evaluateBoardTime(bitBoard, Max_time, bitDepth);
+		
+		SolveEval eval;
+		if (bitBoard.sideToPlay == 0)
+		{
+			if (heuristic_pR == 0)
+				eval = evaluateBoardTime(bitBoard, Max_time, bitDepth, 0);
+			else
+				eval = evaluateBoardTime(bitBoard, Max_time, bitDepth, 1);
+		}
+		else
+		{
+			if (heuristic_pY == 0)
+				eval = evaluateBoardTime(bitBoard, Max_time, bitDepth, 0);
+			else
+				eval = evaluateBoardTime(bitBoard, Max_time, bitDepth, 1);
+		}
+
 		float time = timer.check();
 
 		if(clear_screen)
@@ -317,12 +333,17 @@ void MachineAgainstMachine(const Connect4Board board, float Max_time, unsigned c
 		fancyPrintBoard(*decodeBoard(bitBoard));
 
 	}
+	if (is_win(bitBoard.playerBitboard[0]))
+		return 0;
+	if (is_win(bitBoard.playerBitboard[1]))
+		return 1;
+	return -1;
 }
 
 float evaluatePosition(const Connect4Board& board, unsigned char depth, unsigned char bitDepth)
 {
 	Board* bitBoard = translateBoard(board);
-	float result = evaluateBoard(*bitBoard, depth, bitDepth).eval;
+	float result = evaluateBoard(*bitBoard, depth, bitDepth, 0).eval;
 	delete bitBoard;
 
 	return result;

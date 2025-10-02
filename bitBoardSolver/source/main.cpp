@@ -3,6 +3,7 @@
 #include "testBoards.h"
 
 #include <stdio.h>
+#include <random>
 
 int main()
 {
@@ -10,9 +11,9 @@ int main()
     //board.currentPlayer = YELLOW;
 
 //#define BIT_TREE
-#define EVAL_TREE
+//#define EVAL_TREE
 //#define PLAY
-//#define LET_PLAY
+#define LET_PLAY
 //#define BEST_PATH
 
 #ifdef BIT_TREE
@@ -73,11 +74,42 @@ int main()
 
 #elif defined PLAY
 
-    playAgainstMachine(board, YELLOW, 14, 6, true);
+    playAgainstMachine(board, YELLOW, 8, 10, true);
 
 #elif defined LET_PLAY
 
-    MachineAgainstMachine(board, 0.5f, 8, false);
+    srand(1451534);
+
+    unsigned char winsh0 = 0;
+    unsigned char winsh1 = 0;
+    unsigned char draws = 0;
+
+    for (unsigned int i = 0; i < 100; i++)
+    {
+        float time = rand() / 16384.f + 0.1f;
+        unsigned char winner = MachineAgainstMachine(board, time, 8, 0, 1, true);
+
+        if (winner == 0)
+            winsh0++;
+        else if (winner == 1)
+            winsh1++;
+        else
+            draws++;
+
+        winner = MachineAgainstMachine(board, time, 8, 1, 0, true);
+
+        if (winner == 0)
+            winsh1++;
+        else if (winner == 1)
+            winsh0++;
+        else
+            draws++;
+    }
+
+    printf("heuristic0 won %hhu times\n", winsh0);
+    printf("heuristic1 won %hhu times\n", winsh1);
+    printf("%hhu draws\n", draws);
+
 
 #elif defined BEST_PATH
     Timer timer;
