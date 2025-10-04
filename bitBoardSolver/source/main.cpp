@@ -7,13 +7,13 @@
 
 int main()
 {
-    Connect4Board board; // (T2);
-    //board.currentPlayer = YELLOW;
+    Connect4Board board(T8);
+    board.currentPlayer = YELLOW;
 
-//#define BIT_TREE
+#define BIT_TREE
 //#define EVAL_TREE
 //#define PLAY
-#define LET_PLAY
+//#define LET_PLAY
 //#define BEST_PATH
 
 #ifdef BIT_TREE
@@ -22,7 +22,7 @@ int main()
     fancyPrintBoard(board);
 
     unsigned int repetitions = 1;
-    unsigned char depth = 28;
+    unsigned char depth = 13;
 
     Timer timer;
 	timer.reset();
@@ -78,36 +78,38 @@ int main()
 
 #elif defined LET_PLAY
 
-    srand(1451534);
+    srand(141532362);
 
-    unsigned char winsh0 = 0;
-    unsigned char winsh1 = 0;
-    unsigned char draws = 0;
+    unsigned short REDwinsh0 = 0;
+    unsigned short REDwinsh1 = 0;
+    unsigned short YELLOWwinsh0 = 0;
+    unsigned short YELLOWwinsh1 = 0;
+    unsigned short draws = 0;
 
-    for (unsigned int i = 0; i < 100; i++)
+    for (unsigned int i = 0; i < 300; i++)
     {
-        float time = rand() / 16384.f + 0.1f;
+        float time = rand() / 8192.f + 0.5f;
         unsigned char winner = MachineAgainstMachine(board, time, 8, 0, 1, true);
 
         if (winner == 0)
-            winsh0++;
+            REDwinsh0++;
         else if (winner == 1)
-            winsh1++;
+            YELLOWwinsh1++;
         else
             draws++;
 
         winner = MachineAgainstMachine(board, time, 8, 1, 0, true);
 
         if (winner == 0)
-            winsh1++;
+            REDwinsh1++;
         else if (winner == 1)
-            winsh0++;
+            YELLOWwinsh0++;
         else
             draws++;
     }
 
-    printf("heuristic0 won %hhu times\n", winsh0);
-    printf("heuristic1 won %hhu times\n", winsh1);
+    printf("heuristic0 won %hu times with RED and %hu times with yellow\n", REDwinsh0, YELLOWwinsh0);
+    printf("heuristic1 won %hu times with RED and %hu times with yellow\n", REDwinsh1, YELLOWwinsh1);
     printf("%hhu draws\n", draws);
 
 

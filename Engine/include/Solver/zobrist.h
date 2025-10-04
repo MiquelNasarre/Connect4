@@ -42,8 +42,8 @@ extern void init_zobrist(uint64_t seed = ZOBRIST_SEED);
 static inline uint64_t boardHash(const uint64_t playerBitboards[2])
 {
     uint64_t hash = INITIAL_HASH;
-    uint64_t p0 = playerBitboards[0];
-    uint64_t p1 = playerBitboards[1];
+    const uint64_t p0 = playerBitboards[0];
+    const uint64_t p1 = playerBitboards[1];
     uint64_t bit = 1ULL;
 
     for (uint8_t i = 0; i < 64; i++)

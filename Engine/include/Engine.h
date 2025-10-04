@@ -36,6 +36,11 @@ struct Connect4
 	Connect4(const Connect4& other);
 	Connect4& operator=(const Connect4& other);
 
+	// This constructor copies a conventional 8x8 array as the board. It will
+	// flip the array to put it in the struct prefered position, so enter an
+	// array with normal visual arrangement, consult testBoards.h for examples.
+	Connect4(const unsigned char position[8][8], unsigned char player);
+
 #ifdef _CONSOLE
 	// Print board function inherited from last Connect4
 	// project I did. Do not know how it works.
@@ -140,31 +145,47 @@ User end functions
 	// Returns true if updated correctly, returns false if invalid position.
 	bool update_position(const Connect4* newPosition);
 
+	// If the position is in memory it will return a PositionEval for that position.
+	// If it is not in memory EvalFlag will be INVALID_BOARD, nullptr is current position.
+	PositionEval get_evaluation(const Connect4* position = nullptr) const;
+
+	// It returns a position evaluation after a certain time, you can either 
+	// enter a new position or leave it at nullptr to mantain current position.
+	// If it finds a forced win it will return immediately.
+	PositionEval evaluate_for(float seconds_for_answer, const Connect4* position = nullptr);
+
+	// The new position is introduced and will not return a PositionEval until the depth of the
+	// evaluation is at least the specified or the position is solved, nullptr for current position.
+	PositionEval evaluate_until_depth(unsigned char heuristicDept, const Connect4* position = nullptr);
+
+	// Returns a Connect4 struct copy of the current position under evaluation.
+	Connect4 get_current_position() const;
+
 #ifdef BIT_BOARD
 	// Sends a new position to the engine that will be called for evaluation.
 	// Returns true if updated correctly, returns false if invalid position.
 	bool update_position(const Board* board);
-#endif
 
-	// If the position is in memory it will return a PositionEval for that position.
+	// If the board is in memory it will return a PositionEval for that position.
 	// If it is not in memory EvalFlag will be INVALID_BOARD.
-	PositionEval getPositionEval(const Connect4* position = nullptr) const; // nullptr is current position
+	PositionEval get_evaluation(const Board* board) const;
 
-	// The introduces position is introduced and will not return a PositionEval until the 
-	// depth of the evaluation is at least the specified or the position is solved.
-	PositionEval EvalAtDepth(unsigned char heuristicDept, const Connect4* position = nullptr);
+	// It returns a position evaluation after a certain time, you can either 
+	// enter a new board or leave it at nullptr to mantain current position.
+	// If it finds a forced win it will return immediately.
+	PositionEval evaluate_for(float seconds_for_answer, const Board* board);
+
+	// The new board is introduced and will not return a PositionEval until the depth
+	// of the evaluation is at least the specified or the board is solved.
+	PositionEval evaluate_until_depth(unsigned char heuristicDept, const Board* board);
+
+	// Returns a Board struct copy of the current position under evaluation.
+	Board get_current_bitBoard() const;
+#endif
 
 	// Sets a depth limit for the board evaluation, by default it will take no limit and
 	// evaluate until the position is solved, it is suspended or the engine is destroyed.
 	void setMaxDepth(unsigned char heuristicDepth = UNLIMITED_DEPTH) const;
-
-	// Returns a Connect4 struct copy of the current position under evaluation.
-	Connect4 getCurrentPosition() const;
-
-#ifdef BIT_BOARD
-	// Returns a Board struct copy of the current position under evaluation.
-	Board getCurrentBitBoard() const;
-#endif
 
 /*
 -------------------------------------------------------------------------------------------------------
@@ -180,6 +201,5 @@ Static helpers
 	// If the board position is invalid it returns nullptr.
 	static Board* translateBoard(const Connect4& position);
 #endif
-
 
 };

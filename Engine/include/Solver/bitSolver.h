@@ -34,4 +34,4 @@ extern unsigned char retrieveColumn(const Board& board, TransTable* TT = nullptr
 // For the winning player is the one that wins the fastest.
 // For the losing player is the one that delays the loss the longest.
 // First value is the column second value is the distance.
-extern unsigned char* findBestPath(const Board& board, SolveResult WhoWins, bool* stop = nullptr);
+extern unsigned char* findBestPath(const Board& board, SolveResult WhoWins, TransTable* TT = nullptr, bool* stop = nullptr);

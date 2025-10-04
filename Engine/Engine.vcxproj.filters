@@ -88,5 +88,11 @@
     <ClInclude Include="include\User\Interface.h">
       <Filter>Sources\Public\User</Filter>
     </ClInclude>
+    <ClInclude Include="include\Solver\mask.h">
+      <Filter>Sources\Public\Solver</Filter>
+    </ClInclude>
+    <ClInclude Include="include\User\testBoards.h">
+      <Filter>Sources\Public\Wrappers</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

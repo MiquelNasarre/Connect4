@@ -53,7 +53,7 @@ struct HTTEntry
     uint8_t  heuDepth;      // remaining heuristic depth stored
     uint8_t  bitDepth;      // exact tree depth stored
     uint8_t  flag;          // 0=EXACT, 1=LOWER, 2=UPPER
-    // pad 4 bytes
+    // pad 1 byte
 
     HTTEntry() = default;
     HTTEntry(uint64_t key, uint8_t order[8], float eval, uint8_t heuDepth, uint8_t bitDepth, uint8_t flag)

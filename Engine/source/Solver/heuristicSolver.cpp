@@ -29,6 +29,38 @@
 
 #define MOVE_COUNT_TRIGGER 30
 
+// Helper function for the heuristic. Following the same method seen to check 
+// for a win, generates the connect4 masks for a give board and pop-counts 
+// how many bits are in total, counting the amount of connect4s in a position.
+
+static inline int _countConnect4s(const uint64_t board)
+{
+	uint64_t m;
+	int count = 0;
+
+	// Horizontal (east = -8)
+	m = board & SHIFT_EAST(board);
+	m &= SHIFT_2_EAST(m) & MASK_3E;
+	count += (int)__popcnt64(m);
+
+	// Vertical (south = +1)
+	m = board & SHIFT_SOUTH(board);
+	m &= SHIFT_2_SOUTH(m) & MASK_3S;
+	count += (int)__popcnt64(m);
+
+	// Diagonal SW (+9)
+	m = board & SHIFT_SW(board);
+	m &= SHIFT_2_SW(m) & MASK_3SW;
+	count += (int)__popcnt64(m);
+
+	// Diagonal SE (-7)
+	m = board & SHIFT_SE(board);
+	m &= SHIFT_2_SE(m) & MASK_3SE;
+	count += (int)__popcnt64(m);
+
+	return count;
+}
+
 // This function assigns a value to a given board position.
 // It first generates a bitTree to look for wins and losses.
 // If it doesn't find any it does the following computation.
@@ -49,46 +81,65 @@ static inline float heuristic(const Board& board, unsigned char bitDepth, TransT
 	// Here we flip the others board to represent all the possible 
 	// spots where your pieces could go later in the game
 
-	const uint64_t bitBoard0 = ~board.playerBitboard[board.sideToPlay ^ 1u];
-	const uint64_t bitBoard1 = ~board.playerBitboard[board.sideToPlay];
+	const uint64_t bitBoard0 = board.playerBitboard[board.sideToPlay];
+	const uint64_t bitBoard1 = board.playerBitboard[board.sideToPlay ^ 1u];
+
+	const uint64_t _bitBoard0 = ~bitBoard1;
+	const uint64_t _bitBoard1 = ~bitBoard0;
+
+	const uint64_t bmask = mask(board);
+	const uint64_t holes = ~bmask;
+
+	const uint64_t up1_bmask = SHIFT_NORTH(bmask) | Row0;
+	const uint64_t up1_holes = ~up1_bmask;
+
+	// This are all the 1-move wins (3 in a row) that each player has.
+	// Those at floor level are discarded because they will either be an immediate win
+	// or immediately covered, and since deepSolve did not find a win, they are covered.
+
+	const uint64_t winningHoles0 = COLLAPSE_ALL_WINNING_MOVES(bitBoard0) & up1_holes;
+	const uint64_t winningHoles1 = COLLAPSE_ALL_WINNING_MOVES(bitBoard1) & up1_holes;
+
+	// This are holes which by their nature it is impossible for something to be built on top.
+	// Shared 1 move win, and two vertical one movers in a row.
+
+	const uint64_t barrierHoles = (winningHoles0 & winningHoles1) | (winningHoles0 & SHIFT_NORTH(winningHoles0)) | (winningHoles0 & SHIFT_NORTH(winningHoles1));
+
+	// Now we want to mark the region above all the 1 move holes.
+
+	const uint64_t favorableArea0 = ~FILL_UP_SPACES(winningHoles1);
+	const uint64_t favorableArea1 = ~FILL_UP_SPACES(winningHoles0);
+
+	const uint64_t possibleArea = ~FILL_UP_SPACES(barrierHoles);
+
+	// Now we run all the connect 4 we want to compute.
+
+	const uint64_t favorable_bitBoard0 = _bitBoard0 & favorableArea0 & possibleArea;
+	const uint64_t favorable_bitBoard1 = _bitBoard1 & favorableArea1 & possibleArea;
+
+	const uint64_t possible_bitBoard0 = _bitBoard0 & possibleArea;
+	const uint64_t possible_bitBoard1 = _bitBoard1 & possibleArea;
+
+	const uint64_t favorable_1move_bitBoard0 = winningHoles0 & favorableArea0 & possibleArea;
+	const uint64_t favorable_1move_bitBoard1 = winningHoles1 & favorableArea1 & possibleArea;
+
+	const uint64_t possible_1move_bitBoard0 = winningHoles0 & possibleArea;
+	const uint64_t possible_1move_bitBoard1 = winningHoles1 & possibleArea;
 
 	// Here, following the same method seen to check for a win, we compare how
 	// many possible winning positions each player has, and return the difference
 
-	char count = 0;
+	const char count_Favorables = _countConnect4s(favorable_bitBoard0) - _countConnect4s(favorable_bitBoard1);
+	const char count_Possibles = _countConnect4s(possible_bitBoard0) - _countConnect4s(possible_bitBoard0);
+	const char count_Favorable_1move = (char)__popcnt64(favorable_1move_bitBoard0) - (char)__popcnt64(favorable_1move_bitBoard1);
+	const char count_Possible_1move = (char)__popcnt64(possible_1move_bitBoard0) - (char)__popcnt64(possible_1move_bitBoard1);
 
-	uint64_t m0;
-	uint64_t m1;
+#define WEIGHT_FAVORABLES		(1.f * POINT_DISTANCE)
+#define WEIGHT_POSSIBLES		(2.f * POINT_DISTANCE)
+#define WEIGHT_FAVORABLE_1MOVE	(1.f * POINT_DISTANCE)
+#define WEIGHT_POSSIBLES_1MOVE	(2.f * POINT_DISTANCE)
 
-	// Horizontal (east = -8)
-	m0 = bitBoard0 & (bitBoard0 << 8);
-	m1 = bitBoard1 & (bitBoard1 << 8);
-	m0 &= (m0 << 16) & collapseE;
-	m1 &= (m1 << 16) & collapseE;
-	count += (char)__popcnt64(m0) - (char)__popcnt64(m1);
-
-	// Vertical (south = +1)
-	m0 = bitBoard0 & (bitBoard0 >> 1);
-	m1 = bitBoard1 & (bitBoard1 >> 1);
-	m0 &= (m0 >> 2) & collapseS;
-	m1 &= (m1 >> 2) & collapseS;
-	count += (char)__popcnt64(m0) - (char)__popcnt64(m1);
-
-	// Diagonal SW (+9)
-	m0 = bitBoard0 & (bitBoard0 >> 9);
-	m1 = bitBoard1 & (bitBoard1 >> 9);
-	m0 &= (m0 >> 18) & collapseSW;
-	m1 &= (m1 >> 18) & collapseSW;
-	count += (char)__popcnt64(m0) - (char)__popcnt64(m1);
-
-	// Diagonal SE (-7)
-	m0 = bitBoard0 & (bitBoard0 << 7);
-	m1 = bitBoard1 & (bitBoard1 << 7);
-	m0 &= (m0 << 14) & collapseSE;
-	m1 &= (m1 << 14) & collapseSE;
-	count += (char)__popcnt64(m0) - (char)__popcnt64(m1);
-
-	return count * POINT_DISTANCE; // This maintains the value under +-1 (max is 130 but impossible)
+	return WEIGHT_FAVORABLES * count_Favorables + WEIGHT_POSSIBLES * count_Possibles + WEIGHT_FAVORABLE_1MOVE * count_Favorable_1move + WEIGHT_POSSIBLES_1MOVE * count_Possible_1move;
 }
 
 // This function orders the moves by height from highest to lowest.
@@ -110,7 +161,7 @@ static inline void orderByHeight(const unsigned char boardHeights[8], unsigned c
 	{
 		// If max height reached it sends it to the end.
 
-		while (heights[i] == 8u)
+		while (heights[i] == 8u && lastCol > i)
 		{
 			tempCol = order[i];
 
@@ -123,7 +174,7 @@ static inline void orderByHeight(const unsigned char boardHeights[8], unsigned c
 		// While height bigger than previous it swaps
 
 		unsigned char j = i;
-		while (j > 0 && heights[j] > heights[j - 1])
+		while (j > 0 && heights[j] > heights[j - 1] && heights[j] != 8u)
 		{
 			tempHeight = heights[j];
 			tempCol = order[j];
@@ -219,15 +270,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 		float score = storedData->eval;
 
 		if (score == 1.f || score == -1.f)
-			//if (
-				//// In this case we are in a winning position but the tree might have ommited a faster win.
-				//!(score == 1.f && beta == 1.f && depth + bitDepth < storedData->heuDepth + storedData->bitDepth) &&
-
-				//// In this case we are in a losing position but the tree might not have identified the more resilient loss.
-				//!(score == -1.f && alpha == -1.f && depth + bitDepth < storedData->heuDepth + storedData->bitDepth)
-
-				//) 
-				return score;
+			return score;
 
 		else if (storedData->heuDepth >= depth)
 			switch (storedData->flag)
@@ -295,7 +338,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 			// Checks if a move is winning for the current player.
 			// Wins are checked here so there is no need to check them anywhere else.
 
-			for (unsigned char i = 1; i < 8; i++)
+			for (unsigned char i = 0; i < 8; i++)
 			{
 				unsigned char column = order[i];
 
@@ -384,11 +427,10 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 
 SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned char bitDepth, HeuristicTransTable* givenHTT, TransTable* givenTT)
 {
-	if (!Z_PIECE[0][0])
-		init_zobrist();
+	init_zobrist();
 
 	if (invalidBoard(initialBoard))
-		return SolveEval(0.f,0,0,INVALID_BOARD);
+		return SolveEval(0.f, 0, 0, INVALID_BOARD);
 
 	if (is_win(initialBoard.playerBitboard[initialBoard.sideToPlay]))
 		return SolveEval(1.f, 8,0, CURRENT_PLAYER_WIN);
@@ -407,22 +449,22 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned
 		float eval = (float)solveBoard(board, 64 - board.moveCount, givenTT);
 		unsigned char column = retrieveColumn(board, givenTT);
 
-		if (eval == 1.f)
+		if (eval == YOU_WIN)
 		{
-			unsigned char* quikest = findBestPath(board, CURRENT_PLAYER_WIN);
-			column = quikest[0];
-			depth = quikest[1];
-			free(quikest);
-			return SolveEval(eval, column, depth, CURRENT_PLAYER_WIN);
+			unsigned char* quickest = findBestPath(board, CURRENT_PLAYER_WIN);
+			column = quickest[0];
+			depth = quickest[1];
+			free(quickest);
+			return SolveEval(YOU_WIN, column, depth, CURRENT_PLAYER_WIN);
 		}
 
-		else if (eval == -1.f)
+		else if (eval == OTHER_WIN)
 		{
-			unsigned char* quikest = findBestPath(board, OTHER_PLAYER_WIN);
-			column = quikest[0];
-			depth = quikest[1];
-			free(quikest);
-			return SolveEval(eval, column, depth, OTHER_PLAYER_WIN);
+			unsigned char* quickest = findBestPath(board, OTHER_PLAYER_WIN);
+			column = quickest[0];
+			depth = quickest[1];
+			free(quickest);
+			return SolveEval(OTHER_WIN, column, depth, OTHER_PLAYER_WIN);
 		}
 
 		return SolveEval(eval, column, 255, DRAW);
@@ -433,13 +475,12 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned
 
 	HeuristicTransTable* usingHTT;
 
-	if (givenHTT)	usingHTT = givenHTT;
+	if (givenHTT) usingHTT = givenHTT;
 	else
 	{
 		static HeuristicTransTable* HTT = (HeuristicTransTable*)calloc(64 + 1, sizeof(HeuristicTransTable));
 		usingHTT = HTT;
 	}
-
 
 	for (int d = board.moveCount; d < board.moveCount + depth + 1; d++)
 		if (!usingHTT[d].is_init())
@@ -452,21 +493,21 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned
 	// Depending on the obtained evaluationg will return the value with a different flag
 	// also if it is a Mate situation will find the best path for either player.
 
-	if (eval == 1.f)
+	if (eval == YOU_WIN)
 	{
-		unsigned char* quikest = findBestPath(board, CURRENT_PLAYER_WIN);
-		column = quikest[0];
-		depth = quikest[1];
-		free(quikest);
-		return SolveEval(eval, column, depth, CURRENT_PLAYER_WIN);
+		unsigned char* quickest = findBestPath(board, CURRENT_PLAYER_WIN);
+		column = quickest[0];
+		depth = quickest[1];
+		free(quickest);
+		return SolveEval(YOU_WIN, column, depth, CURRENT_PLAYER_WIN);
 	}
-	else if (eval == -1.f)
+	else if (eval == OTHER_WIN)
 	{
 		unsigned char* quikest = findBestPath(board, OTHER_PLAYER_WIN);
 		column = quikest[0];
 		depth = quikest[1];
 		free(quikest);
-		return SolveEval(eval, column, depth, OTHER_PLAYER_WIN);
+		return SolveEval(OTHER_WIN, column, depth, OTHER_PLAYER_WIN);
 	}
 	else if (eval > 0.f)
 		return SolveEval(eval, column, depth, CURRENT_PLAYER_BETTER);
@@ -474,28 +515,4 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned
 		return SolveEval(eval, column, depth, OTHER_PLAYER_BETTER);
 	else
 		return SolveEval(eval, column, depth, DRAW);
-}
-
-// Evaluates the given board with Iterative Deepening using the evaluateBoard funtion
-// until a certain time threshold is reached or it finds a win.
-// Then it returns the deepest evaluation computed.
-
-SolveEval evaluateBoardTime(const Board& initialBoard, float Max_time, unsigned char bitDepth, HeuristicTransTable* givenHTT, TransTable* givenTT)
-{
-	Timer timer;
-
-	timer.reset();
-	unsigned char depth = 3u;
-	SolveEval eval = evaluateBoard(initialBoard, depth, bitDepth, givenHTT, givenTT);
-	while (
-		initialBoard.moveCount < MOVE_COUNT_TRIGGER
-		&& timer.check() < Max_time
-		&& depth + bitDepth < 64 - initialBoard.moveCount
-		&& eval.eval != 1.f
-		&& eval.eval != -1.f
-		)
-		eval = evaluateBoard(initialBoard, ++depth, bitDepth, givenHTT, givenTT);
-
-	return eval;
-
 }

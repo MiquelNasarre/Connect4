@@ -73,14 +73,6 @@ inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, 
 		SolveResult score = (SolveResult)storedData->score;
 
 		if (score)
-			//if (
-			//	// In this case we are in a winning position but the tree might have ommited a faster win.
-			//	!(score == CURRENT_PLAYER_WIN && beta == CURRENT_PLAYER_WIN && depth < storedData->depth) &&
-
-			//	// In this case we are in a losing position but the tree might not have identified the more resilient loss.
-			//	!(score == OTHER_PLAYER_WIN && alpha == OTHER_PLAYER_WIN && depth < storedData->depth)
-			//
-			//	) 
 			return score;
 
 		else if (storedData->depth >= depth) 
@@ -172,8 +164,7 @@ inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, 
 
 SolveResult solveBoard(const Board& initialBoard, unsigned char depth, TransTable* givenTT)
 {
-	if (!Z_PIECE[0][0])
-		init_zobrist();
+	init_zobrist();
 
 	if (invalidBoard(initialBoard))
 		return INVALID_BOARD;
@@ -248,48 +239,51 @@ unsigned char retrieveColumn(const Board& board, TransTable* givenTT)
 // For the losing player is the one that delays the loss the longest.
 // First value is the column second value is the distance.
 
-unsigned char* findBestPath(const Board& board, SolveResult WhoWins, bool* stop)
+unsigned char* findBestPath(const Board& board, SolveResult WhoWins, TransTable* givenTT, bool* stop)
 {
 	Board b = board;
 
-	TransTable* TTtemp = new TransTable[64];
+	if(!givenTT)
+	{
+		static TransTable* staticTT = new TransTable[64];
+		givenTT = staticTT;
+	}
+
+	for (unsigned char d = board.moveCount; d < 64; d++)
+		givenTT[d].clear();
 
 	SolveResult result = DRAW;
 	unsigned char depth = 0u;
 	while (!result && depth + board.moveCount < 64)
 	{
 		if (stop && *stop)
-		{
-			delete[] TTtemp;
 			return nullptr;
-		}
 
 		depth++;
-		for (int d = board.moveCount; d < board.moveCount + depth; d++)
-			if (!TTtemp[d].is_init())
-				TTtemp[d].init();
 
 		switch (WhoWins)
 		{
 		case CURRENT_PLAYER_WIN:
-			result = exactTree(b, DRAW, CURRENT_PLAYER_WIN, depth, TTtemp);
+			result = exactTree(b, DRAW, CURRENT_PLAYER_WIN, depth, givenTT);
 			break;
 
 		case OTHER_PLAYER_WIN:
-			result = exactTree(b, OTHER_PLAYER_WIN, DRAW, depth, TTtemp);
+			result = exactTree(b, OTHER_PLAYER_WIN, DRAW, depth, givenTT);
+			break;
+
+		case DRAW:
+			result = exactTree(b, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, givenTT);
 			break;
 
 		default:
-			delete[] TTtemp;
 			return nullptr;
 		}
 		
 	}
 
 	unsigned char* solution = (unsigned char*)calloc(2, sizeof(char));
-	solution[0] = TTtemp[board.moveCount].storedBoard(board.hash)->bestCol;
+	solution[0] = givenTT[board.moveCount].storedBoard(board.hash)->bestCol;
 	solution[1] = depth;
 
-	delete[] TTtemp;
 	return solution;
 }

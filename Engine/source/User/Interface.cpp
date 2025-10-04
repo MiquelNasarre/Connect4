@@ -47,8 +47,7 @@ void playAgainstEngine(float engine_time_per_move, Connect4 position, unsigned c
 		else
 		{
 			timer.reset();
-			Timer::sleep_for(unsigned long(engine_time_per_move * 1000.f));
-			PositionEval eval = engine.getPositionEval();
+			PositionEval eval = engine.evaluate_for(engine_time_per_move);
 			float time = timer.check();
 
 			if(clear_console)
@@ -87,8 +86,9 @@ void playAgainstEngine(float engine_time_per_move, Connect4 position, unsigned c
 			playMove(bitBoard, eval.column);
 
 		}
+
 		engine.update_position(&bitBoard);
-		engine.getCurrentPosition().console_fancy_print();
+		engine.get_current_position().console_fancy_print();
 	}
 
 	if (is_win(bitBoard.playerBitboard[0]))
@@ -101,7 +101,7 @@ void playAgainstEngine(float engine_time_per_move, Connect4 position, unsigned c
 		printf("\nThe game has ended in a draw\n");
 }
 
-void engineAgainstEngine(float engine_time_per_move, Connect4 position, bool clear_console)
+char engineAgainstEngine(float engine_time_per_move, Connect4 position, bool clear_console)
 {
 	Timer timer;
 
@@ -116,8 +116,7 @@ void engineAgainstEngine(float engine_time_per_move, Connect4 position, bool cle
 	while (!is_win(bitBoard.playerBitboard[0]) && !is_win(bitBoard.playerBitboard[1]) && bitBoard.moveCount < 64)
 	{
 		timer.reset();
-		Timer::sleep_for(unsigned long(engine_time_per_move * 1000.f));
-		PositionEval eval = engine.getPositionEval();
+		PositionEval eval = engine.evaluate_for(engine_time_per_move);
 		float time = timer.check();
 
 		if (clear_console)
@@ -156,16 +155,29 @@ void engineAgainstEngine(float engine_time_per_move, Connect4 position, bool cle
 		playMove(bitBoard, eval.column);
 
 		engine.update_position(&bitBoard);
-		engine.getCurrentPosition().console_fancy_print();
+		engine.get_current_position().console_fancy_print();
 
 	}
 
 	if (is_win(bitBoard.playerBitboard[0]))
+	{
 		printf("\nPlayer RED has won!!\n");
+		return 0;
+	}
+
 
 	else if (is_win(bitBoard.playerBitboard[1]))
+	{
 		printf("\nPlayer YELLOW has won!!\n");
+		return 1;
+	}
+
 
 	else
+	{
 		printf("\nThe game has ended in a draw\n");
+		return -1;
+	}
+
+
 }

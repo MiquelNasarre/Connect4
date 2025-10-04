@@ -34,9 +34,11 @@
     <ClInclude Include="include\Solver\bitSolver.h" />
     <ClInclude Include="include\Solver\heuristicSolver.h" />
     <ClInclude Include="include\Solver\heuristictt.h" />
+    <ClInclude Include="include\Solver\mask.h" />
     <ClInclude Include="include\Solver\tt.h" />
     <ClInclude Include="include\Solver\zobrist.h" />
     <ClInclude Include="include\User\Interface.h" />
+    <ClInclude Include="include\User\testBoards.h" />
     <ClInclude Include="include\Wrappers\Thread.h" />
     <ClInclude Include="include\Wrappers\Timer.h" />
   </ItemGroup>

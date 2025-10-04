@@ -10,7 +10,7 @@
 #define CALL_MAINLOOP			0
 #define MAINLOOP_WAIT_TIME_MS	5
 #define DEFAULT_EXACT_DEPTH		10
-#define START_MAINLOOP_DEPTH	4
+#define START_MAINLOOP_DEPTH	3
 
 #define N_WORKERS				1
 #define CPU_FLAG(idx)			15
@@ -21,6 +21,8 @@ Connect4 struct functions
 -------------------------------------------------------------------------------------------------------
 */
 
+// Constructor, copies the board elements one by one, without sharing arrays.
+
 inline Connect4::Connect4(const Connect4& other)
 {
 	for (unsigned char i = 0; i < 8; i++)
@@ -29,6 +31,8 @@ inline Connect4::Connect4(const Connect4& other)
 
 	this->player = other.player;
 }
+
+// Equal operator, copies the board elements one by one, without sharing arrays.
 
 inline Connect4& Connect4::operator=(const Connect4& other)
 {
@@ -39,6 +43,18 @@ inline Connect4& Connect4::operator=(const Connect4& other)
 	this->player = other.player;
 
 	return *this;
+}
+
+// This constructor copies a conventional 8x8 array as the board. It will
+// flip the array to put it in the struct prefered position.
+
+Connect4::Connect4(const unsigned char position[8][8], unsigned char player)
+{
+	for (unsigned char i = 0; i < 8; i++)
+		for (unsigned char j = 0; j < 8; j++)
+			this->board[i][j] = position[7 - i][j];
+
+	this->player = player;
 }
 
 #ifdef _CONSOLE
@@ -154,6 +170,7 @@ struct DATA
 	unsigned char first_player = 0;				// Stores initial board parity
 
 	Thread* main_loop_thread = nullptr;			// Main loop thread handle
+	Timer timer;
 
 	TransTable* TT = nullptr;					// Transposition table for exactTree
 	HeuristicTransTable* HTT = nullptr;			// Transposition table for heuristicTree
@@ -197,6 +214,8 @@ inline Connect4 EngineConnect4::decodeBoard(const Board& bitBoard)
 
 inline Board* EngineConnect4::translateBoard(const Connect4& position)
 {
+	init_zobrist();
+
 	Board* board = new Board();
 
 	for(unsigned char r = 0; r<8; r++)
@@ -248,12 +267,12 @@ static inline PositionEval obtainPosEvalFromEntry(HTTEntry* e)
 
 		if (e->eval == 1.f)
 			flag = PositionEval::EvalFlag::CURRENT_PLAYER_WIN;
+		else if (e->eval == -1.f)
+			flag = PositionEval::EvalFlag::OTHER_PLAYER_WIN;
 		else if (e->eval > 0.f)
 			flag = PositionEval::EvalFlag::CURRENT_PLAYER_BETTER;
 		else if (e->eval < 0.f)
 			flag = PositionEval::EvalFlag::OTHER_PLAYER_BETTER;
-		else if (e->eval == -1.f)
-			flag = PositionEval::EvalFlag::OTHER_PLAYER_WIN;
 
 		return { e->eval,e->order[0], unsigned char(e->heuDepth + e->bitDepth), flag };
 
@@ -279,31 +298,40 @@ static inline void main_loop_worker_heuristicSolver(Board board, unsigned char d
 		if (storedData->flag != ENTRY_FLAG_EXACT)
 			*storedData = HTTEntry();
 
-	float eval = heuristicTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, bitDepth, HTT, TT, kill);
+	float eval = 0;
+	
+	if(board.moveCount + depth + bitDepth < 64)
+		eval = heuristicTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, bitDepth, HTT, TT, kill);
 	
 	if (*kill)
 		return;
 
-	if (eval == 1.f || eval == -1.f)
+
+	if (eval == 1.f || eval == -1.f || board.moveCount + depth + bitDepth >= 64)
 	{
-		unsigned char* solution = findBestPath(board, eval == 1.f ? CURRENT_PLAYER_WIN : OTHER_PLAYER_WIN, kill);
+		unsigned char* solution = findBestPath(board, (SolveResult)eval, nullptr, kill);
 		if (*kill)
 			return;
 
 		HTTEntry* e = HTT[board.moveCount].probe(board.hash);
 
+		e->key = board.hash;
 		e->bitDepth = solution[1];
 		e->heuDepth = 0;
+		e->flag = ENTRY_FLAG_EXACT;
+		e->eval = eval;
 
-		for (unsigned char c = 0; c < 8; c++)
-		{
+		unsigned char c;
+		for (c = 0; c < 8; c++)
 			if (e->order[c] == solution[0])
 			{
 				e->order[c] = e->order[0];
 				e->order[0] = solution[0];
 				break;
 			}
-		}
+		if (c == 8)
+			e->order[0] = solution[0];
+
 		free(solution);
 		*solved = true;
 	}
@@ -325,7 +353,6 @@ Main Loop functions
 
 void EngineConnect4::main_loop() const
 {
-	init_zobrist();
 	DATA* data = (DATA*)threadedData;
 
 	// Worker struct that envelops worker threads for the main loop.
@@ -367,12 +394,13 @@ void EngineConnect4::main_loop() const
 		{
 			sleep();
 
+			busy = true;
+
 			if (thread.start(&main_loop_worker_heuristicSolver, data->currentBoard, depth, DEFAULT_EXACT_DEPTH, data->HTT, data->TT, &busy, &data->solution_found, &request))
 			{
 				thread.set_name(L"Worker %u: Depth %u hTree H%llu", idx, depth, data->currentBoard.hash);
 				thread.set_affinity(CPU_FLAG(idx));
 				thread.set_priority(Thread::PRIORITY_HIGHEST);
-				busy = true;
 				return true;
 			}
 			else sleep();
@@ -449,6 +477,8 @@ Constructor/Destructor functions
 
 EngineConnect4::EngineConnect4(const Connect4* position, bool start_suspended)
 {
+	init_zobrist();
+
 	threadedData = (void*)new DATA;
 
 	DATA* data = (DATA*)threadedData;
@@ -474,8 +504,8 @@ EngineConnect4::EngineConnect4(const Connect4* position, bool start_suspended)
 	}
 	data->updatedBoard = true;
 
-	data->TT = new TransTable[64];
-	data->HTT = new HeuristicTransTable[64];
+	data->TT = new TransTable[65];
+	data->HTT = new HeuristicTransTable[65];
 
 	thread->start(&EngineConnect4::thread_entry, this);
 	thread->set_priority(Thread::PRIORITY_NORMAL);
@@ -488,6 +518,8 @@ EngineConnect4::EngineConnect4(const Connect4* position, bool start_suspended)
 
 EngineConnect4::EngineConnect4(const Board* board, bool start_suspended)
 {
+	init_zobrist();
+
 	threadedData = (void*)new DATA;
 
 	DATA* data = (DATA*)threadedData;
@@ -629,7 +661,9 @@ bool EngineConnect4::update_position(const Board* board)
 	}
 
 	data->updatedBoard = true;
-	data->suspended = data->solution_found = is_win(data->currentBoard.playerBitboard[0]) || is_win(data->currentBoard.playerBitboard[1]);
+	data->suspended = data->solution_found = is_win(data->currentBoard.playerBitboard[0]) || 
+											 is_win(data->currentBoard.playerBitboard[1]) || 
+												    data->currentBoard.moveCount == 64;
 
 	Thread::wakeUpThreads(CALL_MAINLOOP);
 
@@ -637,9 +671,9 @@ bool EngineConnect4::update_position(const Board* board)
 }
 
 // If the position is in memory it will return a PositionEval for that position.
-// If it is not in memory EvalFlag will be INVALID_BOARD.
+// If it is not in memory EvalFlag will be INVALID_BOARD, nullptr is current position.
 
-PositionEval EngineConnect4::getPositionEval(const Connect4* position) const
+PositionEval EngineConnect4::get_evaluation(const Connect4* position) const
 {
 	DATA* data = (DATA*)threadedData;
 
@@ -658,14 +692,85 @@ PositionEval EngineConnect4::getPositionEval(const Connect4* position) const
 	return PositionEval();
 }
 
-// The introduces position is introduced and will not return a PositionEval until the 
-// depth of the evaluation is at least the specified or the position is solved.
+// If the board is in memory it will return a PositionEval for that position.
+// If it is not in memory EvalFlag will be INVALID_BOARD, nullptr is current position.
 
-PositionEval EngineConnect4::EvalAtDepth(unsigned char heuristicDept, const Connect4* position)
+PositionEval EngineConnect4::get_evaluation(const Board* board) const
 {
 	DATA* data = (DATA*)threadedData;
 
-	update_position(position);
+	if (board)
+		return obtainPosEvalFromEntry(data->HTT[board->moveCount].storedBoard(board->hash));
+
+	return obtainPosEvalFromEntry(data->HTT[data->currentBoard.moveCount].storedBoard(data->currentBoard.hash));
+}
+
+// It returns a position evaluation after a specified time, you can either 
+// enter a new position or leave it at nullptr to mantain current position.
+// If it finds a forced win it will return immediately.
+
+PositionEval EngineConnect4::evaluate_for(float seconds, const Connect4* position)
+{
+	DATA* data = (DATA*)threadedData;
+
+	if(position)
+		update_position(position);
+
+	float time_0 = data->timer.check();
+
+	while (seconds + time_0 - data->timer.check() > 0.f && !data->solution_found)
+		Thread::waitForWakeUp(CALL_MAINLOOP, MAINLOOP_WAIT_TIME_MS);
+
+	return get_evaluation();
+}
+
+// It updates the current board, and it returns a board evaluation after
+// a specified time. If it finds a forced win it will return immediately.
+
+PositionEval EngineConnect4::evaluate_for(float seconds, const Board* board)
+{
+	DATA* data = (DATA*)threadedData;
+
+
+	update_position(board);
+
+	Timer timer;
+
+	while (float time = timer.check() < seconds && !data->solution_found)
+		Thread::waitForWakeUp(CALL_MAINLOOP, unsigned long((seconds - time) * 1000.f));
+
+	return get_evaluation();
+}
+
+// The new position is introduced and will not return a PositionEval until the depth of the
+// evaluation is at least the specified or the position is solved, nullptr for current position.
+
+PositionEval EngineConnect4::evaluate_until_depth(unsigned char heuristicDept, const Connect4* position)
+{
+	DATA* data = (DATA*)threadedData;
+
+	if (position)
+		update_position(position);
+
+	HTTEntry* e = data->HTT[data->currentBoard.moveCount].storedBoard(data->currentBoard.hash);
+
+	while ((!e || e->heuDepth < heuristicDept) && !data->solution_found)
+	{
+		e = data->HTT[data->currentBoard.moveCount].storedBoard(data->currentBoard.hash);
+		Thread::waitForWakeUp(CALL_MAINLOOP, MAINLOOP_WAIT_TIME_MS);
+	}
+
+	return obtainPosEvalFromEntry(e);
+}
+
+// The new board is introduced and will not return a PositionEval until the depth
+// of the evaluation is at least the specified or the board is solved.
+
+PositionEval EngineConnect4::evaluate_until_depth(unsigned char heuristicDept, const Board* board)
+{
+	DATA* data = (DATA*)threadedData;
+
+	update_position(board);
 
 	HTTEntry* e = data->HTT[data->currentBoard.moveCount].storedBoard(data->currentBoard.hash);
 
@@ -695,14 +800,14 @@ void EngineConnect4::setMaxDepth(unsigned char heuristicDepth) const
 
 // Returns a Connect4 struct copy of the current position under evaluation.
 
-Connect4 EngineConnect4::getCurrentPosition() const
+Connect4 EngineConnect4::get_current_position() const
 {
 	return decodeBoard(((DATA*)threadedData)->currentBoard);
 }
 
 // Returns a Board struct copy of the current position under evaluation.
 
-Board EngineConnect4::getCurrentBitBoard() const
+Board EngineConnect4::get_current_bitBoard() const
 {
 	return ((DATA*)threadedData)->currentBoard;
 }
