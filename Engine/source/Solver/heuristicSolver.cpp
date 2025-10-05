@@ -1,24 +1,12 @@
 #include "heuristicSolver.h"
-#include "heuristictt.h"
-#include "bitSolver.h"
 #include "Timer.h"
 
-#include <bit>
+#include <bit>	// For __popcnt64()
 
 #define YOU_WIN 1.f
 #define OTHER_WIN -1.f
 
-#define KILL_TEST 	if (stop && *stop)return alpha
-
-// This is the depth value at which the heuristic tree
-// stops calling the function orderMoves.
-
-#define NO_ORDERING_DEPTH 2
-
-// This value is the multiplier for the heuristic function value.
-// It has to be small enough to mantain the result between +-1.
-
-#define POINT_DISTANCE 0x1.0p-6f // 1/64 in hexadecimal floating-point
+#define KILL_TEST 	if (DATA.STOP && *DATA.STOP)return alpha
 
 // Default move order used for low depth branches.
 
@@ -69,13 +57,13 @@ static inline int _countConnect4s(const uint64_t board)
 // all the spaces in the board are occupied by that color, and it
 // subtracts the two values, the difference is the board score.
 
-static inline float heuristic(const Board& board, unsigned char bitDepth, TransTable* TT)
+static inline float heuristic(Board board, unsigned char depth, const HeuristicData& DATA)
 {
+
 	// Generates a tree under the position to check for wins or losses
 	// This deepens the heuristic tree making the evaluation fail safe
 
-	const SolveResult deepSolve = noChecksSolveBoard(board, bitDepth, TT);
-	if (deepSolve)
+	if (SolveResult deepSolve = exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, DATA.TT, DATA.STOP))
 		return (float)deepSolve;
 
 	// Here we flip the others board to represent all the possible 
@@ -134,12 +122,7 @@ static inline float heuristic(const Board& board, unsigned char bitDepth, TransT
 	const char count_Favorable_1move = (char)__popcnt64(favorable_1move_bitBoard0) - (char)__popcnt64(favorable_1move_bitBoard1);
 	const char count_Possible_1move = (char)__popcnt64(possible_1move_bitBoard0) - (char)__popcnt64(possible_1move_bitBoard1);
 
-#define WEIGHT_FAVORABLES		(1.f * POINT_DISTANCE)
-#define WEIGHT_POSSIBLES		(2.f * POINT_DISTANCE)
-#define WEIGHT_FAVORABLE_1MOVE	(1.f * POINT_DISTANCE)
-#define WEIGHT_POSSIBLES_1MOVE	(2.f * POINT_DISTANCE)
-
-	return WEIGHT_FAVORABLES * count_Favorables + WEIGHT_POSSIBLES * count_Possibles + WEIGHT_FAVORABLE_1MOVE * count_Favorable_1move + WEIGHT_POSSIBLES_1MOVE * count_Possible_1move;
+	return DATA.FAVORABLES * count_Favorables + DATA.POSSIBLES * count_Possibles + DATA.FAVORABLE_1MOVE * count_Favorable_1move + DATA.POSSIBLES_1MOVE * count_Possible_1move;
 }
 
 // This function orders the moves by height from highest to lowest.
@@ -192,7 +175,7 @@ static inline void orderByHeight(const unsigned char boardHeights[8], unsigned c
 // It generates a heuristic tree of depth 1 and orders the moves
 // according to their score, greatly improving pruning.
 
-static inline float orderMoves(Board& board, unsigned char order[8], unsigned char depth, TransTable* TT)
+static inline float orderMoves(Board& board, unsigned char order[8], unsigned char depth, const HeuristicData& DATA)
 {
 	float scores[8] = { INVALID_BOARD, INVALID_BOARD, INVALID_BOARD, INVALID_BOARD, INVALID_BOARD, INVALID_BOARD, INVALID_BOARD, INVALID_BOARD };
 
@@ -211,7 +194,7 @@ static inline float orderMoves(Board& board, unsigned char order[8], unsigned ch
 		}
 
 		playMove(board, column);
-		scores[i] = -heuristic(board, depth, TT);
+		scores[i] = -heuristic(board, depth, DATA);
 		undoMove(board, column);
 
 		unsigned char j = i;
@@ -244,7 +227,7 @@ static inline float orderMoves(Board& board, unsigned char order[8], unsigned ch
 // It also uses alpha-beta pruning, this time paired with node ordering and PVS,
 // which added to the transposition tables makes the pruning a lot more efficient.
 
-inline float heuristicTree(Board& board, float alpha, float beta, unsigned char depth, unsigned char bitDepth, HeuristicTransTable* HTT, TransTable* TT, bool* stop)
+inline float heuristicTree(Board& board, float alpha, float beta, unsigned char depth, const HeuristicData& DATA)
 {
 	if (board.moveCount == 64u)
 		return DRAW;
@@ -264,7 +247,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 
 	unsigned char order[8] = DEFAULT_MOVE_ORDER;
 
-	HTTEntry* storedData = HTT[board.moveCount].storedBoard(board.hash);
+	HTTEntry* storedData = DATA.HTT[board.moveCount].storedBoard(board.hash);
 	if (storedData)
 	{
 		float score = storedData->eval;
@@ -292,7 +275,8 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 		// Tree cutoff, returns heuristic
 
 		if (!depth)
-			return heuristic(board, bitDepth, TT);
+			return heuristic(board, DATA.EXACT_DEPTH, DATA);
+
 
         // Copies move order stored
 
@@ -307,17 +291,18 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 	// It is also important to order the nodes if the first encounter was of a diffrent
 	// node ordering standard than now
 	
-	if (!storedData || !storedData->heuDepth || (storedData->heuDepth <= NO_ORDERING_DEPTH && depth > NO_ORDERING_DEPTH))
+	if (!storedData || !storedData->heuDepth || (storedData->heuDepth <= DATA.ORDERING_DEPTH && depth > DATA.ORDERING_DEPTH))
 	{
 		// If the depth is high enough it will make a small tree to order moves 
 		// It also looks for forced wins or lossses, if it finds one it returns it.
 
-		if (depth > NO_ORDERING_DEPTH)
+		if (depth > DATA.ORDERING_DEPTH)
 		{
-			const float surfaceCheck = orderMoves(board, order, depth, TT);
+			const float surfaceCheck = orderMoves(board, order, depth, DATA);
+			KILL_TEST;
 
 			if (surfaceCheck == 1.f || surfaceCheck == -1.f)
-				return HTT[board.moveCount].store(board.hash, order, surfaceCheck, depth, bitDepth, ENTRY_FLAG_EXACT);
+				return DATA.HTT[board.moveCount].store(board.hash, order, surfaceCheck, depth, DATA.EXACT_DEPTH, ENTRY_FLAG_EXACT);
 		}
 
 		// Otherwise it orders the nodes by height, it performs a simple 
@@ -328,7 +313,11 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 			// Tree cutoff, returns heuristic.
 
 			if (!depth)
-				return HTT[board.moveCount].store(board.hash, order, heuristic(board, bitDepth, TT), depth, bitDepth, ENTRY_FLAG_EXACT);
+			{
+				float eval = heuristic(board, DATA.EXACT_DEPTH, DATA);
+				KILL_TEST;
+				return DATA.HTT[board.moveCount].store(board.hash, order, eval, depth, DATA.EXACT_DEPTH, ENTRY_FLAG_EXACT);;
+			}
 
 			// It orders the moves from highest column to lowest column.
 			// Leaving invalid moves at the end.
@@ -353,7 +342,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 				{
 					order[i] = order[0];
 					order[0] = column;
-					return HTT[board.moveCount].store(board.hash, order, YOU_WIN, depth, bitDepth, ENTRY_FLAG_EXACT);
+					return DATA.HTT[board.moveCount].store(board.hash, order, YOU_WIN, depth, DATA.EXACT_DEPTH, ENTRY_FLAG_EXACT);
 				}
 
 			}
@@ -371,7 +360,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 
 	float alpha0 = alpha;
 	playMove(board, order[0]);
-	float score = -heuristicTree(board, -beta, -alpha, depth - 1, bitDepth, HTT, TT, stop);  // full window
+	float score = -heuristicTree(board, -beta, -alpha, depth - 1, DATA);  // full window
 	KILL_TEST;
 	undoMove(board, order[0]);
 
@@ -380,7 +369,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 	{
 		alpha = best;
 		if (alpha >= beta)
-			return HTT[board.moveCount].store(board.hash, order, best, depth, bitDepth, (alpha == YOU_WIN) ? ENTRY_FLAG_EXACT : ENTRY_FLAG_LOWER);
+			return DATA.HTT[board.moveCount].store(board.hash, order, best, depth, DATA.EXACT_DEPTH, (alpha == YOU_WIN) ? ENTRY_FLAG_EXACT : ENTRY_FLAG_LOWER);
 	}
 
 	for (unsigned char i = 1; i < 8; i++)
@@ -391,10 +380,10 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 			break;
 
 		playMove(board, column);
-		float score = -heuristicTree(board, -alpha - POINT_DISTANCE, -alpha, depth - 1, bitDepth, HTT, TT, stop); // probe
+		float score = -heuristicTree(board, -alpha - POINT_DISTANCE, -alpha, depth - 1, DATA); // probe
 		KILL_TEST;
 		if (score > alpha)
-			score = -heuristicTree(board, -beta, -alpha, depth - 1, bitDepth, HTT, TT,stop);  // re-search at full window
+			score = -heuristicTree(board, -beta, -alpha, depth - 1, DATA);  // re-search at full window
 		KILL_TEST;
 		undoMove(board, column);
 
@@ -410,14 +399,14 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 			{
 				alpha = best;
 				if (alpha >= beta)
-					return HTT[board.moveCount].store(board.hash, order, best, depth, bitDepth, (alpha == YOU_WIN) ? ENTRY_FLAG_EXACT : ENTRY_FLAG_LOWER);
+					return DATA.HTT[board.moveCount].store(board.hash, order, best, depth, DATA.EXACT_DEPTH, (alpha == YOU_WIN) ? ENTRY_FLAG_EXACT : ENTRY_FLAG_LOWER);
 			}
 		}
 	}
 
 	// Before returning it always saves the position in the TT
 
-	return HTT[board.moveCount].store(board.hash, order, best, depth, bitDepth, (best <= alpha0 && best != OTHER_WIN) ? ENTRY_FLAG_UPPER : ENTRY_FLAG_EXACT);
+	return DATA.HTT[board.moveCount].store(board.hash, order, best, depth, DATA.EXACT_DEPTH, (best <= alpha0 && best != OTHER_WIN) ? ENTRY_FLAG_UPPER : ENTRY_FLAG_EXACT);
 }
 
 // Evaluates the given board position up to a certain depth.
@@ -425,9 +414,13 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 // If it finds a winning move it reanalises the position to find the fastest path.
 // If if finds a losing move it reanalises the position to find the longest path.
 
-SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned char bitDepth, HeuristicTransTable* givenHTT, TransTable* givenTT)
+SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, HeuristicData const* DATA)
 {
 	init_zobrist();
+
+	HeuristicData USING_DATA = {};
+	if (DATA)
+		USING_DATA = *DATA;
 
 	if (invalidBoard(initialBoard))
 		return SolveEval(0.f, 0, 0, INVALID_BOARD);
@@ -444,14 +437,14 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned
 	// or the remaining move count is below a certain threshold
 	// it will compute the entirity of the remaining board
 
-	if (depth + bitDepth > 64 - board.moveCount || board.moveCount >= MOVE_COUNT_TRIGGER)
+	if (depth + USING_DATA.EXACT_DEPTH > 64 - board.moveCount || board.moveCount >= MOVE_COUNT_TRIGGER)
 	{
-		float eval = (float)solveBoard(board, 64 - board.moveCount, givenTT);
-		unsigned char column = retrieveColumn(board, givenTT);
+		float eval = (float)solveBoard(board, 64 - board.moveCount, USING_DATA.TT);
+		unsigned char column = retrieveColumn(board, USING_DATA.TT);
 
 		if (eval == YOU_WIN)
 		{
-			unsigned char* quickest = findBestPath(board, CURRENT_PLAYER_WIN);
+			char* quickest = findBestPath(board, CURRENT_PLAYER_WIN);
 			column = quickest[0];
 			depth = quickest[1];
 			free(quickest);
@@ -460,7 +453,7 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned
 
 		else if (eval == OTHER_WIN)
 		{
-			unsigned char* quickest = findBestPath(board, OTHER_PLAYER_WIN);
+			char* quickest = findBestPath(board, OTHER_PLAYER_WIN);
 			column = quickest[0];
 			depth = quickest[1];
 			free(quickest);
@@ -473,29 +466,26 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned
 	// Here it initialises transposition tables if necessary and calls the tree creation
 	// after the tree creation the best column is retrieved from the transposition table
 
-	HeuristicTransTable* usingHTT;
-
-	if (givenHTT) usingHTT = givenHTT;
-	else
+	if (!USING_DATA.HTT)
 	{
 		static HeuristicTransTable* HTT = (HeuristicTransTable*)calloc(64 + 1, sizeof(HeuristicTransTable));
-		usingHTT = HTT;
+		USING_DATA.HTT = HTT;
 	}
 
 	for (int d = board.moveCount; d < board.moveCount + depth + 1; d++)
-		if (!usingHTT[d].is_init())
-			usingHTT[d].init();
+		if (!USING_DATA.HTT[d].is_init())
+			USING_DATA.HTT[d].init();
 
-	float eval = heuristicTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, bitDepth, usingHTT);
+	float eval = heuristicTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, USING_DATA);
 
-	unsigned char column = usingHTT[board.moveCount].storedBoard(board.hash)->order[0];
+	unsigned char column = USING_DATA.HTT[board.moveCount].storedBoard(board.hash)->order[0];
 
 	// Depending on the obtained evaluationg will return the value with a different flag
 	// also if it is a Mate situation will find the best path for either player.
 
 	if (eval == YOU_WIN)
 	{
-		unsigned char* quickest = findBestPath(board, CURRENT_PLAYER_WIN);
+		char* quickest = findBestPath(board, CURRENT_PLAYER_WIN);
 		column = quickest[0];
 		depth = quickest[1];
 		free(quickest);
@@ -503,7 +493,7 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, unsigned
 	}
 	else if (eval == OTHER_WIN)
 	{
-		unsigned char* quikest = findBestPath(board, OTHER_PLAYER_WIN);
+		char* quikest = findBestPath(board, OTHER_PLAYER_WIN);
 		column = quikest[0];
 		depth = quikest[1];
 		free(quikest);

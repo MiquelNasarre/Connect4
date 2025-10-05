@@ -85,6 +85,11 @@ class EngineConnect4
 private:
 	void* threadedData = nullptr;	// DATA* for threading masked as void* 
 
+	// Before the creation of a tree a future Machine Learning algorithm
+	// will analise which data it want the tree to work with. Including 
+	// depth, exact tree depth, heuristic weights, number of workers, etc.
+	void update_ML_DATA() const;
+
 	// Helper static function used to send the main loop into a thread.
 	static void thread_entry(EngineConnect4* this_)
 	{

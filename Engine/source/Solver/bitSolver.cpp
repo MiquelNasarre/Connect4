@@ -1,5 +1,6 @@
 #include "bitSolver.h"
-#include "tt.h"
+
+#define KILL_TEST if(stop && *stop)return DRAW
 
 // Preferred move order for better pruning depending on the first column
 
@@ -51,8 +52,10 @@ static inline TransTable* TT = nullptr;
 // It solves a given position up to a certain depth, returns win, loss or draw.
 // Uses transposition tables, with best move ordering and alpha beta pruning
 
-inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth, TransTable* TT)
+inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth, TransTable* TT, bool* stop)
 {
+	KILL_TEST;
+
 	// First using the transposition tables we want to check if
 	// we have already encountered this position before.
 	// 
@@ -137,8 +140,10 @@ inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, 
 			continue;
 
 		playMove(board, column);
-		const SolveResult score = -exactTree(board, -beta, -alpha, depth - 1, TT);
+		const SolveResult score = -exactTree(board, -beta, -alpha, depth - 1, TT, stop);
 		undoMove(board, column);
+
+		KILL_TEST;
 
 		if (score > best)
 		{
@@ -239,7 +244,7 @@ unsigned char retrieveColumn(const Board& board, TransTable* givenTT)
 // For the losing player is the one that delays the loss the longest.
 // First value is the column second value is the distance.
 
-unsigned char* findBestPath(const Board& board, SolveResult WhoWins, TransTable* givenTT, bool* stop)
+char* findBestPath(const Board& board, SolveResult WhoWins, TransTable* givenTT, bool* stop)
 {
 	Board b = board;
 
@@ -264,15 +269,15 @@ unsigned char* findBestPath(const Board& board, SolveResult WhoWins, TransTable*
 		switch (WhoWins)
 		{
 		case CURRENT_PLAYER_WIN:
-			result = exactTree(b, DRAW, CURRENT_PLAYER_WIN, depth, givenTT);
+			result = exactTree(b, DRAW, CURRENT_PLAYER_WIN, depth, givenTT, stop);
 			break;
 
 		case OTHER_PLAYER_WIN:
-			result = exactTree(b, OTHER_PLAYER_WIN, DRAW, depth, givenTT);
+			result = exactTree(b, OTHER_PLAYER_WIN, DRAW, depth, givenTT, stop);
 			break;
 
 		case DRAW:
-			result = exactTree(b, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, givenTT);
+			result = exactTree(b, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, givenTT, stop);
 			break;
 
 		default:
@@ -280,10 +285,14 @@ unsigned char* findBestPath(const Board& board, SolveResult WhoWins, TransTable*
 		}
 		
 	}
+	if (stop && *stop)
+		return nullptr;
 
-	unsigned char* solution = (unsigned char*)calloc(2, sizeof(char));
+	char* solution = (char*)calloc(3, sizeof(char));
 	solution[0] = givenTT[board.moveCount].storedBoard(board.hash)->bestCol;
 	solution[1] = depth;
+	solution[2] = (char)result;
+ 
 
 	return solution;
 }

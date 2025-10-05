@@ -92,7 +92,7 @@
       <Filter>Sources\Public\Solver</Filter>
     </ClInclude>
     <ClInclude Include="include\User\testBoards.h">
-      <Filter>Sources\Public\Wrappers</Filter>
+      <Filter>Sources\Public\User</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

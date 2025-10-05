@@ -44,6 +44,7 @@ private:
     bool suspended = false;             // Stores whether the thread is suspended for start call
 
 public:
+    // Return values for the function get last exit code.
     enum ExitCode : unsigned long
     {
         ENDED_SUCCESSFULLY  = 0,
@@ -59,14 +60,12 @@ private:
     bool exit_code_valid_ = false;      // Whether last_exit_code is valid
 
     // Threads cannot be simply copied or initialized by another thread.
-
     Thread(const Thread&) = delete;
     Thread& operator=(const Thread&) = delete;
 
     // Templated function in the format desired for Win32 API for thread creation.
     // a void* to the function is its arguments, it returns an unsigned long,
     // 0 if everything ok, 1 if it caught an exception.
-
     template<typename hFunction>
     static unsigned long _stdcall trampoline(void* pheap_func)
     {
@@ -83,13 +82,11 @@ private:
 
     // This is the actual start function that calls the thread creation.
     // It takes the arguments as expected by CreateThread().
-
     bool start_raw(unsigned long(__stdcall* proc)(void*), void* args);
 
 public:
 
-    // Default constructor without creating any thread
-
+    // Default constructor without creating any thread.
     Thread() = default;
 
     // Actual copy and constructor functions using another Thread object.
@@ -99,11 +96,9 @@ public:
     Thread& operator=(Thread&& other) noexcept;
 
     // Destructor, detaches the thread if it exists.
-
     ~Thread();
 
-    // Templated constructor that calls the start function
-
+    // Templated constructor that calls the start function.
     template<typename Proc, typename... Args>
     Thread(Proc proc, Args... args)
     {
@@ -114,7 +109,6 @@ public:
     // Then it creates a wrap with it and a pointer to the wrap, which sends to the
     // trampoline that mimics the arguments expected by CreateThread so it can be 
     // sent to the start_raw function. Returns true if the creation is successful.
-
     template<typename Proc, typename... Args>
     inline bool start(Proc proc, Args... args) {
 
@@ -139,8 +133,7 @@ public:
         return ok;
     }
 
-    // Calls the one above but makes sure the thread starts suspended.
-
+    // Calls start but makes sure the thread starts suspended.
     template<typename Proc, typename... Args>
     inline bool start_suspended(Proc proc, Args... args) {
         suspended = true;
@@ -149,30 +142,28 @@ public:
         return ok;
     }
 
-    // Waits for the thread to end to continue.
-    // So it joins its timeline for a certain time.
-    // The default value means infinite time.
-
+    // Waits for the thread to end and closes its handle. So it joins its timeline
+    // until it ends, hence the name. The default value means infinite time.
     bool join(unsigned long timeout_ms = 0xFFFFFFFFUL);
 
     // Closes the handle and lets the thread continue independently.
-
     void detach();
 
-    // Resume/Suspend: available but **unsafe** for synchronization.
+    // Resume: available but **unsafe** for synchronization.
     // If you use suspend before start or start_suspended the thread
     // will only start after calling resume.
-
     bool resume();
+
+    // Suspend: available but **unsafe** for synchronization.
+    // If you use suspend before start or start_suspended the thread
+    // will only start after calling resume.
     bool suspend();
 
     // Sets the name of the thread to your provided name, which can 
     // be seen in the debugger, task manager, etc.
+    bool set_name(const wchar_t* name, ...) const;
 
-    bool set_name(const wchar_t* name, ...);
-
-    // Changes the thread’s dynamic priority within the process’s priority.
-
+    // Represents the different priority levels a thread can have.
     enum PriorityLevel : int
     {
         PRIORITY_LOWEST         = -2,
@@ -181,39 +172,37 @@ public:
         PRIORITY_ABOVE_NORMAL   = 1,
         PRIORITY_HIGHEST        = 2,
     };
-    bool set_priority(const PriorityLevel level);
+
+    // Changes the thread’s dynamic priority within the process’s priority.
+    bool set_priority(const PriorityLevel level) const;
 
     // Sets the logical CPUs this thread is allowed to use in your machine
     // The masks are coded as 1ULL << #CPU, for example if I want this thread
     // to use CPU 0 and 2, I would write mask = (1ULL << 0) | (1ULL << 2) 
-
-    bool set_affinity(unsigned long long mask);
+    bool set_affinity(unsigned long long mask) const;
 
     // Hard kill (strongly discouraged). Prefer cooperative stop.
     // Its better if you enter a variable in the thread to call stop.
-
     bool terminate();
 
     // Helpers
 
-    bool            is_joinable() const;
-    bool            is_running() const;
-    bool            has_finished() const;
-    ExitCode        get_exit_code() const;
+    bool            is_joinable() const;        // Checks wether the thread is joinable
+    bool            is_running() const;         // Checks wether the thread is still running
+    bool            has_finished() const;       // Checks wether the thread has finished
+    ExitCode        get_exit_code() const;      // Returns the last thread exit code if it exists
 
-    void*           get_native_handle() const;
-    unsigned long   get_id() const;
+    void*           get_native_handle() const;  // Returns the HANDLE to the thread masked as void*
+    unsigned long   get_id() const;             // Returns the thread ID.
 
     // Static Helper Functions
 
     // Wrap current thread with a real handle (cannot be joined).
     // It can be used to generate a Thread object inside any thread.
-
     static Thread from_current();
 
     // Waits for at least one of the threads listed to finish and returns its 
     // position in the array, if timeout is reached returns -1.
-
     static int waitForThreads(const Thread* const* threads, unsigned int n_threads, unsigned long timeout_ms = 0xFFFFFFFFUL);
 
 private:
@@ -222,11 +211,9 @@ public:
 
     // Puts the current thread to sleep until the wakeUpThreads() function is called
     // with the same ID or the timeout ends.
-
     static bool waitForWakeUp(unsigned char ID = 0u, unsigned long timeout_ms = 0xFFFFFFFFUL);
     
     // Wakes up all the threads that called the function waitForWakeUp() with the same ID.
-
     static void wakeUpThreads(unsigned char ID = 0u);
 };
 

@@ -165,7 +165,7 @@ bool Thread::terminate() {
 // Sets the name of the thread to your provided name, which can 
 // be seen in the debugger, task manager, etc.
 
-bool Thread::set_name(const wchar_t* fmt, ...)
+bool Thread::set_name(const wchar_t* fmt, ...) const
 {
     if (!thread_handle_ || !fmt) return false;
 
@@ -191,7 +191,7 @@ bool Thread::set_name(const wchar_t* fmt, ...)
 
 // Changes the thread’s dynamic priority within the process’s priority.
 
-bool Thread::set_priority(const PriorityLevel level)
+bool Thread::set_priority(const PriorityLevel level) const
 {
     if (!thread_handle_) return false;
 
@@ -220,7 +220,7 @@ bool Thread::set_priority(const PriorityLevel level)
 // Sets the logical CPU's this thread is allowed to use in your machine
 // The masks are coded as 1ULL << #CPU.
 
-bool Thread::set_affinity(unsigned long long mask)
+bool Thread::set_affinity(unsigned long long mask) const
 {
     if (!thread_handle_) 
         return false;
