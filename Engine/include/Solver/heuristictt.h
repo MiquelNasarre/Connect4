@@ -149,8 +149,7 @@ public:
         if (e1->key == key) return e1;
 
         // choose a victim by lower depth (or empty)
-        if (e0->heuDepth <= e1->heuDepth) return e0;
-        return e1;
+        return (e0->heuDepth <= e1->heuDepth) ? e0 : e1;
     }
 
     // This function receives a TTentry and stores it inside te transposition table.

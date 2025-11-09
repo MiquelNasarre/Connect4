@@ -125,7 +125,7 @@ public:
 	// Constructor, it calls the main loop to start analizing the board.
 	// If no board is provided it will default to initial position. If it
 	// started suspended, resume needs to be called to start evaluating.
-	EngineConnect4(const Board* board = nullptr, bool start_suspended = false);
+	EngineConnect4(const Board* board, bool start_suspended = false);
 #endif
 
 	// Destructor, calls kill_main_loop and frees the allocated data.

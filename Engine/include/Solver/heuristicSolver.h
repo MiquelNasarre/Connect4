@@ -23,7 +23,6 @@ struct SolveEval
 	SolveResult flag;		// Indicates what kind of position is evaluated
 };
 
-
 // This is the depth value at which the heuristic tree
 // stops calling the function orderMoves.
 
@@ -52,7 +51,7 @@ struct HeuristicData
 	// Variables to be set by ML algorithms
 
 	unsigned char ORDERING_DEPTH = NO_ORDERING_DEPTH;	// Depth at which the heuristic tree stops calling orderMoves()
-	unsigned char EXACT_DEPTH = DEFAULT_EXACT_DEPTH;	// Depth of the exact tree called by the heuristic function
+	unsigned char EXACT_TAIL = DEFAULT_EXACT_DEPTH;		// Depth of the exact tree called by the heuristic function
 
 	float FAVORABLES = WEIGHT_FAVORABLES;				// Weight of favorable connect 4 cases for each color
 	float POSSIBLES = WEIGHT_POSSIBLES;					// Whight of possible connect 4 cases for each color

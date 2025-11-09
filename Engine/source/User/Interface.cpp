@@ -77,7 +77,12 @@ void playAgainstEngine(float engine_time_per_move, Connect4 position, unsigned c
 			printf("\nValue: %.3f \n", eval.eval);
 
 			if (eval.eval == 1.f || eval.eval == -1.f)
-				printf("Distance to mate: %hhu\n", eval.depth - 1);
+			{
+				if (eval.depth != 255)
+					printf("Distance to mate: %hhu\n", eval.depth - 1);
+				else
+					printf("Distance to mate: Unknown");
+			}
 			else if (eval.depth + bitBoard.moveCount >= 64 || eval.depth == 255)
 				printf("Depth: Until the end of the game\n");
 			else
@@ -146,7 +151,12 @@ char engineAgainstEngine(float engine_time_per_move, Connect4 position, bool cle
 		printf("\nValue: %.3f \n", eval.eval);
 
 		if (eval.eval == 1.f || eval.eval == -1.f)
-			printf("Distance to mate: %hhu\n", eval.depth - 1);
+		{
+			if (eval.depth != 255)
+				printf("Distance to mate: %hhu\n", eval.depth - 1);
+			else
+				printf("Distance to mate: Unknown");
+		}
 		else if (eval.depth + bitBoard.moveCount >= 64 || eval.depth == 255)
 			printf("Depth: Until the end of the game\n");
 		else

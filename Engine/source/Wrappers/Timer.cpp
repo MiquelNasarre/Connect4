@@ -4,9 +4,11 @@
 #include <windows.h>
 #include <timeapi.h>
 #pragma comment(lib, "winmm.lib")
+#elif defined __APPLE__
+#include <mach/mach_time.h>
+#include <time.h>
 #else
 #include <time.h>
-#include <chrono>
 #endif
 
 long long Timer::freq_ = 0LL;
@@ -186,7 +188,13 @@ float Timer::checkTotal()
     if (size_ < 1) return 0.0f;
     const unsigned oldest_idx = (head_ + cap_ - (size_ - 1u)) % cap_;
     const long long oldest_stamp = stamps_[oldest_idx];
+#ifdef _WIN32
     const long long now = qpc_now();
+#else
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    const long long now = (long long)ts.tv_sec * 1000000000LL + (long long)ts.tv_nsec;
+#endif
 
     return to_sec(now - oldest_stamp);
 }
@@ -216,23 +224,23 @@ void Timer::setMax(unsigned int max)
 {
     if (max == 0u) max = 1u;
     // allocate new ring and copy newest-first up to max
-    long long* fresh = (long long*)::calloc(max, sizeof(long long));
+    long long* fresh = (long long*)calloc(max, sizeof(long long));
 
     unsigned new_size = (size_ < max) ? size_ : max;
     unsigned idx = head_;
-    for (unsigned i = 0; i < new_size; ++i) 
+    for (unsigned i = 0; i < new_size; ++i)
     {
-        fresh[i] = stamps_[idx];
+        fresh[new_size - 1 - i] = stamps_[idx];
         idx = (idx + cap_ - 1u) % cap_;
     }
     // replace
     if (stamps_) 
-        ::free(stamps_);
+        free(stamps_);
 
     stamps_ = fresh;
     cap_ = max;
     size_ = new_size;
-    head_ = 0u;
+    head_ = new_size ? (new_size - 1u) : 0u;
 }
 
 /*
@@ -316,5 +324,29 @@ void Timer::sleep_for(unsigned long ms)
     req.tv_sec = (time_t)(ms / 1000UL);
     req.tv_nsec = (long)((ms % 1000UL) * 1000000L);
     nanosleep(&req, nullptr);
+#endif
+}
+
+// Returns system time in nanoseconds as a 64-bit tick (monotonic).
+// Perfect for precise time tracking and as seed for random variables.
+
+unsigned long long Timer::get_system_time_ns()
+{
+#if defined(_WIN32)
+    LARGE_INTEGER freq, ctr;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&ctr);
+    return (unsigned long long)((ctr.QuadPart * 1000000000ULL) / freq.QuadPart);
+#elif defined(__APPLE__)
+    // macOS mach_absolute_time
+    mach_timebase_info_data_t tb;
+    mach_timebase_info(&tb);
+    unsigned long long t = mach_absolute_time();
+    return (t * tb.numer) / tb.denom;
+#else
+    // POSIX
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (unsigned long long)ts.tv_sec * 1000000000ull + (unsigned long long)ts.tv_nsec;
 #endif
 }

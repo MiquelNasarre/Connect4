@@ -3,7 +3,10 @@
 
 int main()
 {
-	playAgainstEngine(1.f, Connect4(T, 1), 1, true);
-	playAgainstEngine(1.f, Connect4(T, 1), 2, true);
+	for (;;)
+		engineAgainstEngine(0.25f, Connect4());
+
+	playAgainstEngine(1.f, Connect4(T, 1), 1);
+	playAgainstEngine(1.f, Connect4(T, 1), 2);
 	return 0;
 }

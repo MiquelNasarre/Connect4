@@ -118,7 +118,7 @@ inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, 
 			const uint64_t s = bit_at(column, board.heights[column]);
 
 			if (is_win(board.playerBitboard[board.sideToPlay] | s))
-				return (SolveResult)TT[board.moveCount].store(board.hash, depth, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT, column);
+				return (SolveResult)TT[board.moveCount].store(board.hash, 1u, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT, column);
 		}
 
 		// Tree cutoff

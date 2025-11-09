@@ -275,7 +275,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 		// Tree cutoff, returns heuristic
 
 		if (!depth)
-			return heuristic(board, DATA.EXACT_DEPTH, DATA);
+			return heuristic(board, DATA.EXACT_TAIL, DATA);
 
 
         // Copies move order stored
@@ -302,7 +302,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 			KILL_TEST;
 
 			if (surfaceCheck == 1.f || surfaceCheck == -1.f)
-				return DATA.HTT[board.moveCount].store(board.hash, order, surfaceCheck, depth, DATA.EXACT_DEPTH, ENTRY_FLAG_EXACT);
+				return DATA.HTT[board.moveCount].store(board.hash, order, surfaceCheck, depth, DATA.EXACT_TAIL, ENTRY_FLAG_EXACT);
 		}
 
 		// Otherwise it orders the nodes by height, it performs a simple 
@@ -314,9 +314,9 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 
 			if (!depth)
 			{
-				float eval = heuristic(board, DATA.EXACT_DEPTH, DATA);
+				float eval = heuristic(board, DATA.EXACT_TAIL, DATA);
 				KILL_TEST;
-				return DATA.HTT[board.moveCount].store(board.hash, order, eval, depth, DATA.EXACT_DEPTH, ENTRY_FLAG_EXACT);;
+				return DATA.HTT[board.moveCount].store(board.hash, order, eval, depth, DATA.EXACT_TAIL, ENTRY_FLAG_EXACT);;
 			}
 
 			// It orders the moves from highest column to lowest column.
@@ -342,7 +342,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 				{
 					order[i] = order[0];
 					order[0] = column;
-					return DATA.HTT[board.moveCount].store(board.hash, order, YOU_WIN, depth, DATA.EXACT_DEPTH, ENTRY_FLAG_EXACT);
+					return DATA.HTT[board.moveCount].store(board.hash, order, YOU_WIN, depth, DATA.EXACT_TAIL, ENTRY_FLAG_EXACT);
 				}
 
 			}
@@ -369,7 +369,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 	{
 		alpha = best;
 		if (alpha >= beta)
-			return DATA.HTT[board.moveCount].store(board.hash, order, best, depth, DATA.EXACT_DEPTH, (alpha == YOU_WIN) ? ENTRY_FLAG_EXACT : ENTRY_FLAG_LOWER);
+			return DATA.HTT[board.moveCount].store(board.hash, order, best, depth, DATA.EXACT_TAIL, (alpha == YOU_WIN) ? ENTRY_FLAG_EXACT : ENTRY_FLAG_LOWER);
 	}
 
 	for (unsigned char i = 1; i < 8; i++)
@@ -399,14 +399,14 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 			{
 				alpha = best;
 				if (alpha >= beta)
-					return DATA.HTT[board.moveCount].store(board.hash, order, best, depth, DATA.EXACT_DEPTH, (alpha == YOU_WIN) ? ENTRY_FLAG_EXACT : ENTRY_FLAG_LOWER);
+					return DATA.HTT[board.moveCount].store(board.hash, order, best, depth, DATA.EXACT_TAIL, (alpha == YOU_WIN) ? ENTRY_FLAG_EXACT : ENTRY_FLAG_LOWER);
 			}
 		}
 	}
 
 	// Before returning it always saves the position in the TT
 
-	return DATA.HTT[board.moveCount].store(board.hash, order, best, depth, DATA.EXACT_DEPTH, (best <= alpha0 && best != OTHER_WIN) ? ENTRY_FLAG_UPPER : ENTRY_FLAG_EXACT);
+	return DATA.HTT[board.moveCount].store(board.hash, order, best, depth, DATA.EXACT_TAIL, (best <= alpha0 && best != OTHER_WIN) ? ENTRY_FLAG_UPPER : ENTRY_FLAG_EXACT);
 }
 
 // Evaluates the given board position up to a certain depth.
@@ -437,7 +437,7 @@ SolveEval evaluateBoard(const Board& initialBoard, unsigned char depth, Heuristi
 	// or the remaining move count is below a certain threshold
 	// it will compute the entirity of the remaining board
 
-	if (depth + USING_DATA.EXACT_DEPTH > 64 - board.moveCount || board.moveCount >= MOVE_COUNT_TRIGGER)
+	if (depth + USING_DATA.EXACT_TAIL > 64 - board.moveCount || board.moveCount >= MOVE_COUNT_TRIGGER)
 	{
 		float eval = (float)solveBoard(board, 64 - board.moveCount, USING_DATA.TT);
 		unsigned char column = retrieveColumn(board, USING_DATA.TT);

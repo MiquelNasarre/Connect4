@@ -11,7 +11,7 @@ The thread generation is templated, so it can take any function with
 any arbitrary amount of arguments please beware that the function needs
 to match the arguments provided.
 
-DISCLAIMER!! Make sure not to use references variables inside the functions
+DISCLAIMER!! Make sure not to use referenced variables inside the functions
 since it does not take references, it will just make a copy of them.
 You should use pointers instead for shared variables between threads.
 -------------------------------------------------------------------------------------------------------
@@ -24,14 +24,20 @@ You should use pointers instead for shared variables between threads.
 #define CPU1 0x02ULL // Mask to refer to CPU1 when setting affinity
 #define CPU2 0x04ULL // Mask to refer to CPU2 when setting affinity
 #define CPU3 0x08ULL // Mask to refer to CPU3 when setting affinity
+#define CPU4 0x10ULL // Mask to refer to CPU4 when setting affinity
+#define CPU5 0x20ULL // Mask to refer to CPU5 when setting affinity
+#define CPU6 0x40ULL // Mask to refer to CPU6 when setting affinity
+#define CPU7 0x80ULL // Mask to refer to CPU7 when setting affinity
+
+#define CPU(idx) (0x01ULL << (idx)) // Mask to refer to any particular CPU when setting affinity
 
 
 // Definition of the class, everything in this header is contained inside the class Thread.
-// A thread object can be generated anywhere in your code, and a different thread can be
-// created by simply calling the function start(*function, function args...).
-// This thread can then be controlled by other functions inside the class.
-// But control through the input variables is always preferred.
 
+// A thread object can be generated anywhere in your code, and a different thread can be
+// created by simply calling one of the functions 'start'(*function, function args...).
+// This thread can then be controlled by other functions inside the class. But control
+// through the input variables is always preferred.
 class Thread {
 private:
 
@@ -178,7 +184,7 @@ public:
 
     // Sets the logical CPUs this thread is allowed to use in your machine
     // The masks are coded as 1ULL << #CPU, for example if I want this thread
-    // to use CPU 0 and 2, I would write mask = (1ULL << 0) | (1ULL << 2) 
+    // to use CPU 0 and 2, I would write mask = (1ULL << 0) | (1ULL << 2).
     bool set_affinity(unsigned long long mask) const;
 
     // Hard kill (strongly discouraged). Prefer cooperative stop.
@@ -187,13 +193,13 @@ public:
 
     // Helpers
 
-    bool            is_joinable() const;        // Checks wether the thread is joinable
-    bool            is_running() const;         // Checks wether the thread is still running
-    bool            has_finished() const;       // Checks wether the thread has finished
+    bool            is_joinable() const;        // Checks whether the thread is joinable
+    bool            is_running() const;         // Checks whether the thread is still running
+    bool            has_finished() const;       // Checks whether the thread has finished
     ExitCode        get_exit_code() const;      // Returns the last thread exit code if it exists
 
     void*           get_native_handle() const;  // Returns the HANDLE to the thread masked as void*
-    unsigned long   get_id() const;             // Returns the thread ID.
+    unsigned long   get_id() const;             // Returns the thread ID
 
     // Static Helper Functions
 

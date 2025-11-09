@@ -217,7 +217,7 @@ bool Thread::set_priority(const PriorityLevel level) const
     }
 }
 
-// Sets the logical CPU's this thread is allowed to use in your machine
+// Sets the logical CPUs this thread is allowed to use in your machine
 // The masks are coded as 1ULL << #CPU.
 
 bool Thread::set_affinity(unsigned long long mask) const
