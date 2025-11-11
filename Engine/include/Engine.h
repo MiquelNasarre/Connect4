@@ -49,7 +49,7 @@ struct Connect4
 };
 
 // Struct that will be return after calling for a board evaluation.
-// Contains all the important data of the analized position.
+// Contains all the important data of the analyzed position.
 struct PositionEval
 {
 	float eval;				// Value between -1 and 1, evaluation for the current player
@@ -86,7 +86,7 @@ private:
 	void* threadedData = nullptr;	// DATA* for threading masked as void* 
 
 	// Before the creation of a tree a future Machine Learning algorithm
-	// will analise which data it want the tree to work with. Including 
+	// will analyze which data it want the tree to work with. Including 
 	// depth, exact tree depth, heuristic weights, number of workers, etc.
 	void update_ML_DATA() const;
 
@@ -116,16 +116,23 @@ Constructors/Destructors
 */
 
 public:
-	// Constructor, it calls the main loop to start analizing the position.
+	// Constructor, it calls the main loop to start analyzing the position.
 	// If no position is provided it will default to initial position. If it
 	// started suspended, resume needs to be called to start evaluating.
-	EngineConnect4(const Connect4* Position = nullptr, bool start_suspended = false);
+	EngineConnect4(const Connect4* Position = nullptr, const char* nn_weights_file = nullptr, bool start_suspended = false);
 
 #ifdef BIT_BOARD
-	// Constructor, it calls the main loop to start analizing the board.
+	// Constructor, it calls the main loop to start analyzing the board.
 	// If no board is provided it will default to initial position. If it
 	// started suspended, resume needs to be called to start evaluating.
-	EngineConnect4(const Board* board, bool start_suspended = false);
+	EngineConnect4(const Board* board, const char* nn_weights_file = nullptr, bool start_suspended = false);
+
+#ifdef NEURAL_NETWORK
+	// Constructor, it calls the main loop to start analyzing the board.
+	// If no board is provided it will default to initial position. If it
+	// started suspended, resume needs to be called to start evaluating.
+	EngineConnect4(const Board* board, NeuralNetwork* nn_scheduler, bool start_suspended = false);
+#endif
 #endif
 
 	// Destructor, calls kill_main_loop and frees the allocated data.
@@ -187,11 +194,27 @@ User end functions
 	// Returns a Board struct copy of the current position under evaluation.
 	Board get_current_bitBoard() const;
 #endif
+#ifdef H_SOLVER
+	// Returns the HTTEntry* to the transposition table for the specified board.
+	HTTEntry* get_entry(const Board* board) const;
+#endif
+#ifdef B_SOLVER
+	// Returns the TTEntry* to the transposition table for the specified board.
+	TTEntry* get_exact_entry(const Board* board) const;
+#endif
 
 	// Sets a depth limit for the board evaluation, by default it will take no limit and
 	// evaluate until the position is solved, it is suspended or the engine is destroyed.
 	void setMaxDepth(unsigned char heuristicDepth = UNLIMITED_DEPTH) const;
+	
+	// Sets the weights for the Neural Network that schedules tree calls to the ones 
+	// specified in the weights file. If nullptr or file not found no NN scheduler is used.
+	void setSchedulerWeights(const char* nn_weights_file) const;
 
+#ifdef NEURAL_NETWORK
+	// Sets the scheduler to be used by the engine during tree calls.
+	void setScheduler(NeuralNetwork* nn_scheduler, bool copy = true) const;
+#endif
 /*
 -------------------------------------------------------------------------------------------------------
 Static helpers

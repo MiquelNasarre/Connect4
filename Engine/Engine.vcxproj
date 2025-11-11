@@ -20,9 +20,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\Engine.cpp" />
+    <ClCompile Include="source\Engine_NN.cpp" />
     <ClCompile Include="source\Solver\bitSolver.cpp" />
     <ClCompile Include="source\Solver\heuristicSolver.cpp" />
     <ClCompile Include="source\Solver\zobrist.cpp" />
+    <ClCompile Include="source\Trainer.cpp" />
     <ClCompile Include="source\User\Interface.cpp" />
     <ClCompile Include="source\User\main.cpp" />
     <ClCompile Include="source\Wrappers\Thread.cpp" />
@@ -30,6 +32,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\Engine.h" />
+    <ClInclude Include="include\Engine_NN.h" />
     <ClInclude Include="include\Solver\bitBoard.h" />
     <ClInclude Include="include\Solver\bitSolver.h" />
     <ClInclude Include="include\Solver\heuristicSolver.h" />
@@ -37,6 +40,7 @@
     <ClInclude Include="include\Solver\mask.h" />
     <ClInclude Include="include\Solver\tt.h" />
     <ClInclude Include="include\Solver\zobrist.h" />
+    <ClInclude Include="include\Trainer.h" />
     <ClInclude Include="include\User\Interface.h" />
     <ClInclude Include="include\User\testBoards.h" />
     <ClInclude Include="include\Wrappers\Thread.h" />

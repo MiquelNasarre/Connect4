@@ -11,6 +11,8 @@ a given depth, its return values are either win, loss or draw.
 -------------------------------------------------------------------------------------------------------
 */
 
+#define B_SOLVER
+
 // This is the main function of the bit-solver.
 // It solves a given position up to a certain depth, returns win, loss or draw.
 // Uses transposition tables, with best move ordering and alpha beta pruning.

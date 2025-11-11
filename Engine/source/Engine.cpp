@@ -1,4 +1,5 @@
 #include "heuristicSolver.h"
+#include "Engine_NN.h"
 #include "Engine.h"
 #include "Thread.h"
 #include "Timer.h"
@@ -13,7 +14,9 @@
 
 #define MAINLOOP_WAIT_TIME_MS	5
 #define START_DEPTH_H			3
-#define START_DEPTH_E			10
+#define START_DEPTH_E			13
+
+#define DEFAULT_DEADLINE		1.f
 
 #define CPU_FLAG(idx)			255
 
@@ -66,13 +69,10 @@ Connect4::Connect4(const unsigned char position[8][8], unsigned char player)
 void Connect4::console_fancy_print()
 {
 	constexpr int N = 8;
-	char** T = (char**)calloc(N, sizeof(void*));
+	char T[N][N] = {};
 	for (unsigned char i = 0; i < N; i++)
-	{
-		T[i] = (char*)calloc(N, sizeof(char));
 		for (unsigned char j = 0; j < N; j++)
 			T[i][j] = (char)board[7 - i][j];
-	}
 
 	for (int f = 0; f < N - 3; f++) {
 		for (int c = 0; c < N; c++) {
@@ -170,6 +170,7 @@ struct DATA
 {
 	HeuristicData H_DATA = {};						// Constant variables for the heuristic tree
 
+	NeuralNetwork* scheduler = nullptr;
 	unsigned char HEURISTIC_DEPTH = START_DEPTH_H;	// Current depth to analize
 	unsigned char EXACT_DEPTH = START_DEPTH_E;		// Start exact depth to analize
 
@@ -297,91 +298,129 @@ Static main loop worker functions
 -------------------------------------------------------------------------------------------------------
 */
 
-static inline void main_loop_worker_heuristicSolver(Board board, unsigned char depth, HeuristicData* H_DATA, bool* busy)
+static inline void main_loop_worker_heuristicSolver(Board board, unsigned char depth, HeuristicData* H_DATA, bool* busy, bool* solving, bool* solved, bool* kill_exact)
 {
 	// If there is not exact data about your board, you need to be able to overwrite it.
 	if (HTTEntry* storedData = H_DATA->HTT[board.moveCount].storedBoard(board.hash))
-		if (storedData && storedData->flag != ENTRY_FLAG_EXACT && storedData->heuDepth > depth)
+		if (storedData->flag != ENTRY_FLAG_EXACT && storedData->heuDepth > depth)
 			storedData->heuDepth = depth;
 
 	heuristicTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, *H_DATA);
 
+	HTTEntry* storedData = H_DATA->HTT[board.moveCount].storedBoard(board.hash);
+
+	if (!storedData || *H_DATA->STOP)
+		goto end;
+
+	if (storedData->eval == 1.f || storedData->eval == -1.f)
+	{
+		*solving = true;
+		*kill_exact = true;
+
+		char* solution = findBestPath(board, (SolveResult)storedData->eval, nullptr, H_DATA->STOP);
+		if (*H_DATA->STOP)
+			goto end;
+
+		storedData->heuDepth = 0;
+		storedData->bitDepth = solution[1];
+		for (unsigned char c = 0; c < 8; c++)
+			if (storedData->order[c] == solution[0])
+				storedData->order[c] = storedData->order[0];
+
+		storedData->order[0] = solution[0];
+
+		free(solution);
+		*solved = true;
+		*solving = false;
+		goto end;
+	}
+
+	if (storedData->heuDepth + storedData->bitDepth + board.moveCount == 64)
+	{
+		*kill_exact = true;
+		*solved = true;
+		goto end;
+	}
+
+end:
 	*busy = false;
 	Thread::wakeUpThreads(CALL_MAINLOOP);
-	return delete H_DATA;
+	delete H_DATA;
+	return;
 }
 
-static inline void main_loop_worker_exactSolver(Board board, unsigned char start_depth, unsigned char maxDepth, HeuristicData* H_DATA, bool* busy, bool* solving, bool* solved, bool* kill_heuristic)
+static inline void main_loop_worker_exactSolver(Board board, unsigned char depth, HeuristicData* H_DATA, bool* busy, bool* solving, bool* solved, bool* kill_heuristic)
 {
-	unsigned char d = (start_depth < 64 - board.moveCount) ? start_depth : 64 - board.moveCount;
-	for (; d < maxDepth; d++)
+	if(depth > 64 - board.moveCount) 
+		depth = 64 - board.moveCount;
+	
+	
+	exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, H_DATA->TT, H_DATA->STOP);
+	TTEntry* storedData = H_DATA->TT[board.moveCount].storedBoard(board.hash);
+
+	if (!storedData || *H_DATA->STOP)
+		goto end;
+
+	if (storedData->score != DRAW)
 	{
-		exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, d, H_DATA->TT, H_DATA->STOP);
+		*solving = true;
+		*kill_heuristic = true;
+		HTTEntry* e = H_DATA->HTT[board.moveCount].probe(board.hash);
+
+		e->key = board.hash;
+		e->bitDepth = 255;
+		e->heuDepth = 0;
+		e->flag = ENTRY_FLAG_EXACT;
+		e->eval = (float)storedData->score;
+		e->order[0] = storedData->bestCol;
+
+
+		char* solution = findBestPath(board, (SolveResult)storedData->score, nullptr, H_DATA->STOP);
 		if (*H_DATA->STOP)
-			break;
+			goto end;
 
-		TTEntry* storedData = H_DATA->TT[board.moveCount].storedBoard(board.hash);
+		e->bitDepth = solution[1];
+		for (unsigned char c = 0; c < 8; c++)
+			if (e->order[c] == solution[0])
+				e->order[c] = e->order[0];
 
-		if (storedData->score != DRAW)
-		{	
-			*solving = true;
-			*kill_heuristic = true;
-			HTTEntry* e = H_DATA->HTT[board.moveCount].probe(board.hash);
+		e->order[0] = solution[0];
 
-			e->key = board.hash;
-			e->bitDepth = 255;
-			e->heuDepth = 0;
-			e->flag = ENTRY_FLAG_EXACT;
-			e->eval = (float)storedData->score;
-			e->order[0] = storedData->bestCol;
-
-
-			char* solution = findBestPath(board, (SolveResult)storedData->score, nullptr, H_DATA->STOP);
-			if (*H_DATA->STOP)
-				break;
-			
-			e->bitDepth = solution[1];
-			for (unsigned char c = 0; c < 8; c++)
-				if (e->order[c] == solution[0])
-					e->order[c] = e->order[0];
-
-			e->order[0] = solution[0];
-
-			free(solution);
-			*solved = true;
-			*solving = false;
-			break;
-		}
-
-		if (d + board.moveCount == 64)
-		{
-			*solving = true;
-			*kill_heuristic = true;
-
-			HTTEntry* e = H_DATA->HTT[board.moveCount].probe(board.hash);
-
-			e->key = board.hash;
-			e->bitDepth = storedData->depth;
-			e->heuDepth = 0;
-			e->flag = ENTRY_FLAG_EXACT;
-			e->eval = (float)storedData->score;
-
-			for (unsigned char c = 0; c < 8; c++)
-				if (e->order[c] == storedData->bestCol)
-					e->order[c] = e->order[0];
-
-			e->order[0] = storedData->bestCol;
-
-			*solved = true;
-			*solving = false;
-			break;
-		}
-
+		free(solution);
+		*solved = true;
+		*solving = false;
+		goto end;
 	}
+
+	if (depth + board.moveCount == 64)
+	{
+		*solving = true;
+		*kill_heuristic = true;
+
+		HTTEntry* e = H_DATA->HTT[board.moveCount].probe(board.hash);
+
+		e->key = board.hash;
+		e->bitDepth = storedData->depth;
+		e->heuDepth = 0;
+		e->flag = ENTRY_FLAG_EXACT;
+		e->eval = (float)storedData->score;
+
+		for (unsigned char c = 0; c < 8; c++)
+			if (e->order[c] == storedData->bestCol)
+				e->order[c] = e->order[0];
+
+		e->order[0] = storedData->bestCol;
+
+		*solved = true;
+		*solving = false;
+		goto end;
+	}
+
+end:
 	*busy = false;
 	Thread::wakeUpThreads(CALL_MAINLOOP);
-	return delete H_DATA;
-
+	delete H_DATA;
+	return;
 }
 
 /*
@@ -390,43 +429,8 @@ Main Loop functions
 -------------------------------------------------------------------------------------------------------
 */
 
-// Future workerWeb
-
-//struct webWorker
-//{
-//	DATA* data;
-//	webWorker* workerWeb;
-//
-//	unsigned int idx;
-//	Thread node_eval;
-//	bool request;
-//
-//	enum Status : char
-//	{
-//		HEURISTIC,
-//		EXACT,
-//		UNEMPLOYED
-//	} STATUS = UNEMPLOYED;
-//
-//	bool*			avaliable_worker;
-//	bool*			call_worker;
-//	unsigned char*  priority_worker;
-//
-//	float my_alpha;
-//	float my_beta;
-//
-//	void initialize_web(DATA* data, webWorker* web, unsigned int idx, bool* avaliability, unsigned char* priority);
-//
-//	void set_status(Status status);
-//
-//	void heuristic_tree_node(Board board, float& inherited_alphe, float& inherited_beta, unsigned char depth, bool PVS);
-//	void exact_tree_node(Board board, float& inherited_alphe, float& inherited_beta, unsigned char depth, bool PVS);
-//
-//
-//};
-
 // Before the creation of a tree a future Machine Learning algorithm
-// will analise which data it want the tree to work with. Including 
+// will analyze which data it want the tree to work with. Including 
 // depth, exact tree depth, heuristic weights, number of workers, etc.
 
 inline void EngineConnect4::update_ML_DATA() const
@@ -435,13 +439,20 @@ inline void EngineConnect4::update_ML_DATA() const
 
 	if (data->updatedBoard)
 	{
+		data->EXACT_DEPTH = START_DEPTH_E;
 		data->HEURISTIC_DEPTH = START_DEPTH_H;
-		data->updatedBoard = false;
+		data->H_DATA.EXACT_TAIL = DEFAULT_TAIL_DEPTH;
 	}
-	else
-		data->HEURISTIC_DEPTH++;
+
+	if (!data->scheduler)
+	{
+		data->updatedBoard = false;
+		return;
+	}
+
 
 	// NN inputs
+	bool& updated_board		= data->updatedBoard;
 	uint8_t& moveCount		= data->currentBoard.moveCount;
 	uint8_t& col_height0	= data->currentBoard.heights[0];
 	uint8_t& col_height1	= data->currentBoard.heights[1];
@@ -451,11 +462,17 @@ inline void EngineConnect4::update_ML_DATA() const
 	uint8_t& col_height5	= data->currentBoard.heights[5];
 	uint8_t& col_height6	= data->currentBoard.heights[6];
 	uint8_t& col_height7	= data->currentBoard.heights[7];
-	uint8_t& heu_depth_in	= data->H_DATA.HTT[data->currentBoard.moveCount].storedBoard(data->currentBoard.hash)->heuDepth;
-	uint8_t& bit_depth_in	= data->H_DATA.HTT[data->currentBoard.moveCount].storedBoard(data->currentBoard.hash)->bitDepth;
-	uint8_t& eval_flag		= data->H_DATA.HTT[data->currentBoard.moveCount].storedBoard(data->currentBoard.hash)->flag;
-	float& evaluation		= data->H_DATA.HTT[data->currentBoard.moveCount].storedBoard(data->currentBoard.hash)->eval;
-	float time_left			= data->deadline - data->timer.check();
+
+	HTTEntry* h_entry = data->H_DATA.HTT[data->currentBoard.moveCount].storedBoard(data->currentBoard.hash);
+	TTEntry* e_entry = data->H_DATA.TT[data->currentBoard.moveCount].storedBoard(data->currentBoard.hash);
+
+	uint8_t heu_depth_in	= h_entry ? h_entry->heuDepth : 0u;
+	uint8_t exact_tail_in	= h_entry ? h_entry->bitDepth : 0u;
+	uint8_t bit_depth_in	= e_entry ? e_entry->depth : 0u;
+	uint8_t eval_flag		= h_entry ? h_entry->flag : ENTRY_FLAG_UPPER;
+	float evaluation		= h_entry ? h_entry->eval : 0.0f;
+	float time_left			= data->deadline ? data->deadline - data->timer.check() : DEFAULT_DEADLINE;
+	if (time_left < 0.f) time_left = 1.f;
 
 	// NN outputs
 	float& heu_weight0		= data->H_DATA.FAVORABLES;
@@ -463,9 +480,74 @@ inline void EngineConnect4::update_ML_DATA() const
 	float& heu_weight2		= data->H_DATA.POSSIBLES;
 	float& heu_weight3		= data->H_DATA.POSSIBLES_1MOVE;
 	uint8_t& order_depth	= data->H_DATA.ORDERING_DEPTH;
-	uint8_t& exact_tail		= data->H_DATA.EXACT_TAIL;
+	uint8_t& exact_tail_out	= data->H_DATA.EXACT_TAIL;
 	uint8_t& heu_depth_out	= data->HEURISTIC_DEPTH;
 	uint8_t& bit_depth_out	= data->EXACT_DEPTH;
+
+	float NN_inputs[INPUT_DIM] = {
+		float(updated_board),
+		moveCount / 64.f,
+		col_height0 / 8.f,
+		col_height1 / 8.f,
+		col_height2 / 8.f,
+		col_height3 / 8.f,
+		col_height4 / 8.f,
+		col_height5 / 8.f,
+		col_height6 / 8.f,
+		col_height7 / 8.f,
+		float(heu_depth_in),
+		float(exact_tail_in),
+		float(bit_depth_in),
+		float(eval_flag),
+		evaluation,
+		time_left
+	};
+
+	// Here you feed the data to the NN and expect a return
+
+	float* NN_outputs = data->scheduler->forward_pass(NN_inputs);
+
+	// Here you assign the outputs
+
+	// Smoothen weights
+	float total_weight = 
+		(NN_outputs[0] > 0.f ? NN_outputs[0] : -NN_outputs[0]) + 
+		(NN_outputs[1] > 0.f ? NN_outputs[1] : -NN_outputs[1]) +
+		(NN_outputs[2] > 0.f ? NN_outputs[2] : -NN_outputs[2]) + 
+		(NN_outputs[3] > 0.f ? NN_outputs[3] : -NN_outputs[3]);
+
+	if (total_weight < 0.01f) total_weight = 0.01f;
+	heu_weight0 = NN_outputs[0] * POINT_DISTANCE / total_weight;
+	heu_weight1 = NN_outputs[1] * POINT_DISTANCE / total_weight;
+	heu_weight2 = NN_outputs[2] * POINT_DISTANCE / total_weight;
+	heu_weight3 = NN_outputs[3] * POINT_DISTANCE / total_weight;
+
+	// Convert to integers discrete outputs
+	order_depth = uint8_t(NN_outputs[4]);
+	exact_tail_out = uint8_t(NN_outputs[5]);
+	heu_depth_out = uint8_t(NN_outputs[6]);
+	bit_depth_out = uint8_t(NN_outputs[7]);
+	
+	// Keep values under end of game
+	if (exact_tail_out + heu_depth_out + data->currentBoard.moveCount > 64)
+	{
+		if (exact_tail_out + data->currentBoard.moveCount > 64)
+		{
+			heu_depth_out = 0;
+			exact_tail_out = 64 - data->currentBoard.moveCount;
+		}
+		else
+			heu_depth_out = 64 - exact_tail_out - data->currentBoard.moveCount;
+	}
+	if (bit_depth_out + data->currentBoard.moveCount > 64)
+		bit_depth_out = 64 - data->currentBoard.moveCount;
+
+	if (heu_depth_out > data->maxDepth) heu_depth_out = data->maxDepth;
+	if (bit_depth_out > data->maxDepth) bit_depth_out = data->maxDepth;
+	if (bit_depth_out == 0) bit_depth_out = 1;
+	if (exact_tail_out == 0) exact_tail_out = 1;
+
+	data->updatedBoard = false;
 }
 
 // This is the core of the engine, will be running from creation to
@@ -517,7 +599,7 @@ void EngineConnect4::main_loop() const
 			busy = false;
 		}
 
-		inline bool do_a_tree()
+		inline bool run_heuristic_tree(bool* exact_killer)
 		{
 			sleep();
 			busy = true;
@@ -526,7 +608,7 @@ void EngineConnect4::main_loop() const
 			*H_DATA = data->H_DATA;
 			H_DATA->STOP = &request;
 
-			if (thread.start(&main_loop_worker_heuristicSolver, data->currentBoard, data->HEURISTIC_DEPTH, H_DATA, &busy))
+			if (thread.start(&main_loop_worker_heuristicSolver, data->currentBoard, data->HEURISTIC_DEPTH, H_DATA, &busy, &data->finding_solution, &data->solution_found, exact_killer))
 			{
 				thread.set_name(L"Worker %u: Depth %u HEURISTIC H%llu", idx, data->HEURISTIC_DEPTH, data->currentBoard.hash);
 				thread.set_affinity(CPU_FLAG(idx));
@@ -542,6 +624,7 @@ void EngineConnect4::main_loop() const
 
 	struct EWorker
 	{
+	private:
 		DATA* data = nullptr;
 		unsigned int idx = 0;
 		Thread		thread;
@@ -549,6 +632,10 @@ void EngineConnect4::main_loop() const
 		bool		busy = false;
 
 	public:
+		bool* get_request_pointer()
+		{
+			return &request;
+		}
 
 		inline void initialize(unsigned int idx, DATA* data)
 		{
@@ -584,9 +671,9 @@ void EngineConnect4::main_loop() const
 			*H_DATA = data->H_DATA;
 			H_DATA->STOP = &request;
 
-			if (thread.start(&main_loop_worker_exactSolver, data->currentBoard, data->EXACT_DEPTH, data->maxDepth, H_DATA, &busy, &data->finding_solution, &data->solution_found, heuristic_killer))
+			if (thread.start(&main_loop_worker_exactSolver, data->currentBoard, data->EXACT_DEPTH, H_DATA, &busy, &data->finding_solution, &data->solution_found, heuristic_killer))
 			{
-				thread.set_name(L"Worker %u: Depth %u EXACT H%llu", idx, data->HEURISTIC_DEPTH, data->currentBoard.hash);
+				thread.set_name(L"Worker %u: Depth %u EXACT H%llu", idx, data->EXACT_DEPTH, data->currentBoard.hash);
 				thread.set_affinity(CPU_FLAG(idx));
 				thread.set_priority(Thread::PRIORITY_HIGHEST);
 				return true;
@@ -602,12 +689,14 @@ void EngineConnect4::main_loop() const
 
 	while (!data->terminate)
 	{
-		// The loop will be waiting in a suspended state if it is suspended.
+		// The loop will be waiting in a suspended state if it is suspended or solved.
 
 		if (data->suspended || data->solution_found)
 			e_worker.sleep(), h_worker.sleep();
-		else if (data->finding_solution)
-			h_worker.sleep();
+
+		// Intentionally idle while stitching solution.
+
+		else if (data->finding_solution);
 
 		// If the board has been updated every worker goes to work from scratch.
 		// The TTs are the same, if it is a continuation it will catch up quickly.
@@ -615,18 +704,25 @@ void EngineConnect4::main_loop() const
 		else if (data->updatedBoard)
 		{
 			update_ML_DATA();
-			h_worker.do_a_tree();
+			h_worker.run_heuristic_tree(e_worker.get_request_pointer());
 			e_worker.run_exact_tree(h_worker.get_request_pointer());
 		}
 
-		// It checks wether a worker has finished and can do more trees.
+		// It checks wether the heuristic worker has finished and can do more trees.
 
-		else if (h_worker.is_sleeping() && data->HEURISTIC_DEPTH <= data->maxDepth)
+		else if (h_worker.is_sleeping() && data->HEURISTIC_DEPTH++ < data->maxDepth)
 		{
 			update_ML_DATA();
-			h_worker.do_a_tree();
+			h_worker.run_heuristic_tree(e_worker.get_request_pointer());
 		}
 
+		// It checks whether the exact worker has finished and can do more trees.
+
+		else if (e_worker.is_sleeping() && data->EXACT_DEPTH++ < data->maxDepth)
+		{
+			update_ML_DATA();
+			e_worker.run_exact_tree(h_worker.get_request_pointer());
+		}
 
 		// It will wait a little bit after every loop unless it is awakened.
 
@@ -661,7 +757,7 @@ Constructor/Destructor functions
 // If no position is provided it will default to initial position. If it
 // started suspended, resume needs to be called to start evaluating.
 
-EngineConnect4::EngineConnect4(const Connect4* position, bool start_suspended)
+EngineConnect4::EngineConnect4(const Connect4* position, const char* nn_weights_file, bool start_suspended)
 {
 	init_zobrist();
 
@@ -669,6 +765,8 @@ EngineConnect4::EngineConnect4(const Connect4* position, bool start_suspended)
 
 	DATA* data = (DATA*)threadedData;
 	Thread* thread = data->main_loop_thread = new Thread;
+
+	setSchedulerWeights(nn_weights_file);
 
 	if (start_suspended)
 		data->suspended = true;
@@ -702,7 +800,7 @@ EngineConnect4::EngineConnect4(const Connect4* position, bool start_suspended)
 // If no board is provided it will default to initial position. If it
 // started suspended, resume needs to be called to start evaluating.
 
-EngineConnect4::EngineConnect4(const Board* board, bool start_suspended)
+EngineConnect4::EngineConnect4(const Board* board, const char* nn_weights_file, bool start_suspended)
 {
 	init_zobrist();
 
@@ -710,6 +808,46 @@ EngineConnect4::EngineConnect4(const Board* board, bool start_suspended)
 
 	DATA* data = (DATA*)threadedData;
 	Thread* thread = data->main_loop_thread = new Thread;
+
+	setSchedulerWeights(nn_weights_file);
+
+	if (start_suspended)
+		data->suspended = true;
+
+	if (board && !invalidBoard(*board))
+	{
+		data->first_player = (board->moveCount + board->sideToPlay) % 2;
+		data->currentBoard = *board;
+	}
+	else
+	{
+		data->first_player = 0;
+		data->currentBoard = Board();
+	}
+	data->updatedBoard = true;
+
+	data->H_DATA.TT = new TransTable[65];
+	data->H_DATA.HTT = new HeuristicTransTable[65];
+
+	thread->start(&EngineConnect4::thread_entry, this);
+	thread->set_priority(Thread::PRIORITY_NORMAL);
+	thread->set_name(L"Engine Main Loop");
+}
+
+// Constructor, it calls the main loop to start analyzing the board.
+// If no board is provided it will default to initial position. If it
+// started suspended, resume needs to be called to start evaluating.
+
+EngineConnect4::EngineConnect4(const Board* board, NeuralNetwork* nn_scheduler, bool start_suspended)
+{
+	init_zobrist();
+
+	threadedData = (void*)new DATA;
+
+	DATA* data = (DATA*)threadedData;
+	Thread* thread = data->main_loop_thread = new Thread;
+
+	setScheduler(nn_scheduler);
 
 	if (start_suspended)
 		data->suspended = true;
@@ -742,6 +880,8 @@ EngineConnect4::~EngineConnect4()
 
 	DATA* data = (DATA*)threadedData;
 
+	if (data->scheduler)
+		delete data->scheduler;
 	delete[] data->H_DATA.TT;
 	delete[] data->H_DATA.HTT;
 
@@ -816,6 +956,7 @@ bool EngineConnect4::update_position(const Connect4* newPosition)
 	data->suspended = data->solution_found = is_win(data->currentBoard.playerBitboard[0]) || 
 											 is_win(data->currentBoard.playerBitboard[1]) || 
 												    data->currentBoard.moveCount == 64;
+	data->deadline = 0.f;
 
 	Thread::wakeUpThreads(CALL_MAINLOOP);
 
@@ -854,6 +995,7 @@ bool EngineConnect4::update_position(const Board* board)
 	data->suspended = data->solution_found = is_win(data->currentBoard.playerBitboard[0]) || 
 											 is_win(data->currentBoard.playerBitboard[1]) || 
 												    data->currentBoard.moveCount == 64;
+	data->deadline = 0.f;
 
 	Thread::wakeUpThreads(CALL_MAINLOOP);
 
@@ -908,7 +1050,7 @@ PositionEval EngineConnect4::evaluate_for(float seconds, const Connect4* positio
 
 	data->deadline = data->timer.check() + seconds;
 
-	while (float time_left = data->deadline - data->timer.check() > 0.f && !data->solution_found)
+	while (data->deadline - data->timer.check() > 0.f && !data->solution_found)
 		Thread::waitForWakeUp(CALL_MAINLOOP, 1UL);
 
 	return get_evaluation();
@@ -926,7 +1068,7 @@ PositionEval EngineConnect4::evaluate_for(float seconds, const Board* board)
 
 	data->deadline = data->timer.check() + seconds;
 
-	while (float time_left = data->deadline - data->timer.check() > 0.f && !data->solution_found)
+	while (data->deadline - data->timer.check() > 0.f && !data->solution_found)
 		Thread::waitForWakeUp(CALL_MAINLOOP, 1UL);
 
 	return get_evaluation();
@@ -973,6 +1115,24 @@ PositionEval EngineConnect4::evaluate_until_depth(unsigned char heuristicDept, c
 	return obtainPosEvalFromEntry(e);
 }
 
+// Returns the HTTEntry* to the transposition table for the specified board.
+
+HTTEntry* EngineConnect4::get_entry(const Board* board) const
+{
+	DATA* data = (DATA*)threadedData;
+
+	return data->H_DATA.HTT[board->moveCount].storedBoard(board->hash);
+}
+
+// Returns the TTEntry* to the transposition table for the specified board.
+
+TTEntry* EngineConnect4::get_exact_entry(const Board* board) const
+{
+	DATA* data = (DATA*)threadedData;
+
+	return data->H_DATA.TT[board->moveCount].storedBoard(board->hash);
+}
+
 // Sets a depth limit for the board evaluation, by default it will take no limit and
 // evaluate until the position is solved, it is suspended or the engine is destroyed.
 
@@ -986,6 +1146,44 @@ void EngineConnect4::setMaxDepth(unsigned char heuristicDepth) const
 		Thread::wakeUpThreads(CALL_MAINLOOP);
 	}
 
+}
+
+// Sets the weights for the Neural Network that schedules tree calls to the ones 
+// specified in the weights file. If nullptr or file not found no NN scheduler is used.
+
+void EngineConnect4::setSchedulerWeights(const char* nn_weights_file) const
+{
+	DATA* data = (DATA*)threadedData;
+
+	if (data->scheduler)
+	{
+		delete data->scheduler;
+		data->scheduler = nullptr;
+	}
+
+	if (nn_weights_file)
+	{
+		if (FILE* file = fopen(nn_weights_file, "rb"))
+		{
+			fclose(file);
+			data->scheduler = new NeuralNetwork(nn_weights_file);
+		}
+	}
+}
+
+// Sets the scheduler to be used by the engine during tree calls.
+
+void EngineConnect4::setScheduler(NeuralNetwork* nn_scheduler, bool copy) const
+{
+	DATA* data = (DATA*)threadedData;
+
+	if (data->scheduler)
+		delete data->scheduler;
+
+	if (copy && nn_scheduler)
+		data->scheduler = new NeuralNetwork(*nn_scheduler);
+	else
+		data->scheduler = nn_scheduler;
 }
 
 // Returns a Connect4 struct copy of the current position under evaluation.

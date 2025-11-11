@@ -11,6 +11,8 @@ this funtions will return the SolveEval struct, with the values listed below.
 -------------------------------------------------------------------------------------------------------
 */
 
+#define H_SOLVER
+
 // Return values of the evaluation, this includes a numerical value between -1 and 1,
 // the column that gives this best result for the current player,
 // the depth that this position was evaluated
@@ -33,7 +35,7 @@ struct SolveEval
 
 #define POINT_DISTANCE 0x1.0p-6f // 1/64 in hexadecimal floating-point
 
-#define DEFAULT_EXACT_DEPTH		10
+#define DEFAULT_TAIL_DEPTH		10
 
 #define WEIGHT_FAVORABLES		(1.f * POINT_DISTANCE)
 #define WEIGHT_POSSIBLES		(2.f * POINT_DISTANCE)
@@ -51,7 +53,7 @@ struct HeuristicData
 	// Variables to be set by ML algorithms
 
 	unsigned char ORDERING_DEPTH = NO_ORDERING_DEPTH;	// Depth at which the heuristic tree stops calling orderMoves()
-	unsigned char EXACT_TAIL = DEFAULT_EXACT_DEPTH;		// Depth of the exact tree called by the heuristic function
+	unsigned char EXACT_TAIL = DEFAULT_TAIL_DEPTH;		// Depth of the exact tree called by the heuristic function
 
 	float FAVORABLES = WEIGHT_FAVORABLES;				// Weight of favorable connect 4 cases for each color
 	float POSSIBLES = WEIGHT_POSSIBLES;					// Whight of possible connect 4 cases for each color
