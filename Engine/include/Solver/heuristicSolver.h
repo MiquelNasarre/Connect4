@@ -11,8 +11,6 @@ this funtions will return the SolveEval struct, with the values listed below.
 -------------------------------------------------------------------------------------------------------
 */
 
-#define H_SOLVER
-
 // Return values of the evaluation, this includes a numerical value between -1 and 1,
 // the column that gives this best result for the current player,
 // the depth that this position was evaluated
@@ -31,11 +29,11 @@ struct SolveEval
 #define NO_ORDERING_DEPTH 2
 
 // This value is the multiplier for the heuristic function value.
-// It has to be small enough to mantain the result between +-1.
+// It has to be small enough to maintain the result between +-1.
 
 #define POINT_DISTANCE 0x1.0p-6f // 1/64 in hexadecimal floating-point
 
-#define DEFAULT_TAIL_DEPTH		10
+#define DEFAULT_TAIL_DEPTH		8
 
 #define WEIGHT_FAVORABLES		(1.f * POINT_DISTANCE)
 #define WEIGHT_POSSIBLES		(2.f * POINT_DISTANCE)

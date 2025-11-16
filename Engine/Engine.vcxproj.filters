@@ -106,5 +106,8 @@
     <ClInclude Include="include\Trainer.h">
       <Filter>Sources\Public</Filter>
     </ClInclude>
+    <ClInclude Include="include\Wrappers\rng.h">
+      <Filter>Sources\Public\Wrappers</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

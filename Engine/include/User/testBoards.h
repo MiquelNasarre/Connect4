@@ -168,7 +168,6 @@ static const unsigned char T10[8][8] =
 
 };
 
-
 static const unsigned char T11[8][8] =
 {
 

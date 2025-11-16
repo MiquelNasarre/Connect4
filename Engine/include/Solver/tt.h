@@ -18,12 +18,14 @@ Macros for TTs
 -------------------------------------------------------------------------------------------------------
 */
 
+#define _EXACT_TT
+
 // Number of entries that will be created by defaul in a transposition table.
 // 
 // The solver generates a TT for every moveCount that it analises. That way it avoids 
 // overriding hot boards of different depths. But that comes at the cost of a lor of 
 // memory usage. 
-// The number below seems to be the perfect balance between mantaining hot paths 
+// The number below seems to be the perfect balance between maintaining hot paths 
 // avaliable on the TT and not making it too big for the program to search for
 // different entries. Modify with caution.
 
@@ -145,19 +147,6 @@ public:
         // If keys are different or you are deeper
         if (depth >= e->depth || e->key != key)
             *e = TTEntry{ key, depth, score, flag, bestCol };
-
-        //// If both paths win but yours is faster
-        //else if (score == CURRENT_PLAYER_WIN && e->score == CURRENT_PLAYER_WIN)
-        //    *e = TTEntry{ key, depth, score, flag, bestCol };
-
-        //// If both paths lose but yours loses earlier (adjust loss depth)
-        //else if (score == OTHER_PLAYER_WIN && e->score == OTHER_PLAYER_WIN)
-        //    *e = TTEntry{ key, depth, score, flag, bestCol };
-
-        //// If the deepest path loses but you resist
-        //// You probably are in the most resilient path (keep best column)
-        //else if (score > OTHER_PLAYER_WIN && e->score == OTHER_PLAYER_WIN)
-        //    *e = TTEntry{ key, e->depth, OTHER_PLAYER_WIN, ENTRY_FLAG_EXACT, bestCol };
 
         return score;
     }

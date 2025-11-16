@@ -8,15 +8,13 @@ It encapsulates all the functions from the other files, and threads
 the tree generation to allow for continous computation as well as 
 multiple threads computing a position at the same time.
 
-Its main tool is the heuristicTree which is used at increasing depths
-to solve a given position. Currently the threads compute the same 
-position at different depths. Ideally in the future every thread 
-will compute a diferent part of the tree.
+The engine runs two trees in parallel, an heuristic based tree and 
+a tree that looks only for winning combinations and assists the 
+heuristic tree with its data. Both of them start at a given depth
+and increase depth progressively as they get solved.
 -------------------------------------------------------------------------------------------------------
 -------------------------------------------------------------------------------------------------------
 */
-
-#define UNLIMITED_DEPTH 255u
 
 /*
 -------------------------------------------------------------------------------------------------------
@@ -37,7 +35,7 @@ struct Connect4
 	Connect4& operator=(const Connect4& other);
 
 	// This constructor copies a conventional 8x8 array as the board. It will
-	// flip the array to put it in the struct prefered position, so enter an
+	// flip the array to put it in the struct preferred position, so enter an
 	// array with normal visual arrangement, consult testBoards.h for examples.
 	Connect4(const unsigned char position[8][8], unsigned char player);
 
@@ -52,10 +50,10 @@ struct Connect4
 // Contains all the important data of the analyzed position.
 struct PositionEval
 {
-	float eval;				// Value between -1 and 1, evaluation for the current player
-	unsigned char column;	// Best column to throw at the given position
-	unsigned char depth;	// Depth at which the position was evalued 
-							// If the position is win/loss, depth is the distance with perfect play
+	float eval = 0.f;			// Value between -1 and 1, evaluation for the current player
+	unsigned char column = 0u;	// Best column to throw at the given position
+	unsigned char depth = 0u;	// Depth at which the position was evalued 
+								// If the position is win/loss, depth is the distance with perfect play
 
 	// Reflects the state of the positon, invalid board means the board data is not being stored.
 	enum EvalFlag : char
@@ -82,13 +80,17 @@ Engine class
 // or update the engines max depth at any time.
 class EngineConnect4
 {
+#ifdef _TRAINING
+	// The trainer has access to its private variables and functions.
+	friend class Trainer;
+#endif 
 private:
 	void* threadedData = nullptr;	// DATA* for threading masked as void* 
 
-	// Before the creation of a tree a future Machine Learning algorithm
-	// will analyze which data it want the tree to work with. Including 
-	// depth, exact tree depth, heuristic weights, number of workers, etc.
-	void update_ML_DATA() const;
+	// Before the creation of a tree a simple MLP gets fed the updated position
+	// and outputs the details about the following tree generation. Including 
+	// different depths for the trees and dynamic heuristic weights.
+	void update_scheduler() const;
 
 	// Helper static function used to send the main loop into a thread.
 	static void thread_entry(EngineConnect4* this_)
@@ -121,13 +123,13 @@ public:
 	// started suspended, resume needs to be called to start evaluating.
 	EngineConnect4(const Connect4* Position = nullptr, const char* nn_weights_file = nullptr, bool start_suspended = false);
 
-#ifdef BIT_BOARD
+#ifdef _BIT_BOARD
 	// Constructor, it calls the main loop to start analyzing the board.
 	// If no board is provided it will default to initial position. If it
 	// started suspended, resume needs to be called to start evaluating.
 	EngineConnect4(const Board* board, const char* nn_weights_file = nullptr, bool start_suspended = false);
 
-#ifdef NEURAL_NETWORK
+#ifdef _NEURAL_NETWORK
 	// Constructor, it calls the main loop to start analyzing the board.
 	// If no board is provided it will default to initial position. If it
 	// started suspended, resume needs to be called to start evaluating.
@@ -162,18 +164,18 @@ User end functions
 	PositionEval get_evaluation(const Connect4* position = nullptr) const;
 
 	// It returns a position evaluation after a certain time, you can either 
-	// enter a new position or leave it at nullptr to mantain current position.
+	// enter a new position or leave it at nullptr to maintain current position.
 	// If it finds a forced win it will return immediately.
 	PositionEval evaluate_for(float seconds_for_answer, const Connect4* position = nullptr);
 
 	// The new position is introduced and will not return a PositionEval until the depth of the
 	// evaluation is at least the specified or the position is solved, nullptr for current position.
-	PositionEval evaluate_until_depth(unsigned char heuristicDept, const Connect4* position = nullptr);
+	PositionEval evaluate_until_depth(unsigned char total_depth, const Connect4* position = nullptr);
 
 	// Returns a Connect4 struct copy of the current position under evaluation.
 	Connect4 get_current_position() const;
 
-#ifdef BIT_BOARD
+#ifdef _BIT_BOARD
 	// Sends a new position to the engine that will be called for evaluation.
 	// Returns true if updated correctly, returns false if invalid position.
 	bool update_position(const Board* board);
@@ -183,49 +185,55 @@ User end functions
 	PositionEval get_evaluation(const Board* board) const;
 
 	// It returns a position evaluation after a certain time, you can either 
-	// enter a new board or leave it at nullptr to mantain current position.
+	// enter a new board or leave it at nullptr to maintain current position.
 	// If it finds a forced win it will return immediately.
-	PositionEval evaluate_for(float seconds_for_answer, const Board* board);
+	PositionEval evaluate_for(float seconds_for_answer, const Board* board, bool update_scheduler = true);
 
 	// The new board is introduced and will not return a PositionEval until the depth
 	// of the evaluation is at least the specified or the board is solved.
-	PositionEval evaluate_until_depth(unsigned char heuristicDept, const Board* board);
+	PositionEval evaluate_until_depth(unsigned char total_depth, const Board* board);
 
 	// Returns a Board struct copy of the current position under evaluation.
 	Board get_current_bitBoard() const;
 #endif
-#ifdef H_SOLVER
+#ifdef _HEURISTIC_TT
 	// Returns the HTTEntry* to the transposition table for the specified board.
 	HTTEntry* get_entry(const Board* board) const;
 #endif
-#ifdef B_SOLVER
+#ifdef _EXACT_TT
 	// Returns the TTEntry* to the transposition table for the specified board.
 	TTEntry* get_exact_entry(const Board* board) const;
 #endif
-
-	// Sets a depth limit for the board evaluation, by default it will take no limit and
-	// evaluate until the position is solved, it is suspended or the engine is destroyed.
-	void setMaxDepth(unsigned char heuristicDepth = UNLIMITED_DEPTH) const;
 	
 	// Sets the weights for the Neural Network that schedules tree calls to the ones 
 	// specified in the weights file. If nullptr or file not found no NN scheduler is used.
 	void setSchedulerWeights(const char* nn_weights_file) const;
 
-#ifdef NEURAL_NETWORK
+#ifdef _NEURAL_NETWORK
 	// Sets the scheduler to be used by the engine during tree calls.
 	void setScheduler(NeuralNetwork* nn_scheduler, bool copy = true) const;
 #endif
+
+	// Sets the conservatism value for the scheduler. Depending on the computer speed a 
+	// higher conservatism might be needed to ensure tree completion or a lower to get 
+	// better depth readings. It divides the time left to hurry the scheduler.
+	void setConservatism(float conservatism) const;
+
+	// Sets the CPU affinity of the threads run by the engine, set to all cpu cores by 
+	// default. For immediate enforcement call suspend/resume. Returns true uppon success, 
+	// false otherwise. For more information on how to select the CPU check Thread.h.
+	bool set_affinity(unsigned long long cpu_flag) const;
 /*
 -------------------------------------------------------------------------------------------------------
 Static helpers
 -------------------------------------------------------------------------------------------------------
 */
 
-#ifdef BIT_BOARD
+#ifdef _BIT_BOARD
 	// It takes a bitBoard and returns the equivalent Connect4 struct.
 	static Connect4 decodeBoard(const Board& bitBoard);
 
-	// It takes a Connect4 strunc and returns the equivalent bitBoard.
+	// It takes a Connect4 struct and returns the equivalent bitBoard.
 	// If the board position is invalid it returns nullptr.
 	static Board* translateBoard(const Connect4& position);
 #endif

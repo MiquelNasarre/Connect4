@@ -43,6 +43,7 @@
     <ClInclude Include="include\Trainer.h" />
     <ClInclude Include="include\User\Interface.h" />
     <ClInclude Include="include\User\testBoards.h" />
+    <ClInclude Include="include\Wrappers\rng.h" />
     <ClInclude Include="include\Wrappers\Thread.h" />
     <ClInclude Include="include\Wrappers\Timer.h" />
   </ItemGroup>

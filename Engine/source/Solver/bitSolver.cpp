@@ -1,4 +1,5 @@
 #include "bitSolver.h"
+#include "heuristictt.h" // For writing solutions if found
 
 #define KILL_TEST if(stop && *stop)return DRAW
 
@@ -34,7 +35,7 @@ static inline TransTable* TT = nullptr;
 // if I can beat that score there is no point in analyzing any further since 
 // he will not play this move allowing me a better outcome than a previous move would.
 // 
-// "Alpha" is my highest score from previous positions, and will get uptaded while analizing 
+// "Alpha" is my highest score from previous positions, and will get uptaded while analyzing 
 // the current avaliable moves, if my oponent beats it further down the line, there is no need
 // to keep evaluating that line since I will not choose it, I have a better option.
 //
@@ -52,7 +53,7 @@ static inline TransTable* TT = nullptr;
 // It solves a given position up to a certain depth, returns win, loss or draw.
 // Uses transposition tables, with best move ordering and alpha beta pruning
 
-inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth, TransTable* TT, bool* stop)
+inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth, TransTable* TT, void* HTT, unsigned char no_HTT_depth, bool* stop)
 {
 	KILL_TEST;
 
@@ -118,7 +119,12 @@ inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, 
 			const uint64_t s = bit_at(column, board.heights[column]);
 
 			if (is_win(board.playerBitboard[board.sideToPlay] | s))
+			{
+				if (HTT && depth > no_HTT_depth)
+					((HeuristicTransTable*)HTT)[board.moveCount].store(board.hash, column, (float)CURRENT_PLAYER_WIN, 0u, 1u, ENTRY_FLAG_EXACT);
 				return (SolveResult)TT[board.moveCount].store(board.hash, 1u, CURRENT_PLAYER_WIN, ENTRY_FLAG_EXACT, column);
+			}
+
 		}
 
 		// Tree cutoff
@@ -140,7 +146,7 @@ inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, 
 			continue;
 
 		playMove(board, column);
-		const SolveResult score = -exactTree(board, -beta, -alpha, depth - 1, TT, stop);
+		const SolveResult score = -exactTree(board, -beta, -alpha, depth - 1, TT, HTT, no_HTT_depth, stop);
 		undoMove(board, column);
 
 		KILL_TEST;
@@ -153,15 +159,20 @@ inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, 
 			if (best > alpha)
 			{
 				alpha = best;
-				if (alpha >= beta) 
-					return (SolveResult)TT[board.moveCount].store(board.hash, depth, best, ENTRY_FLAG_LOWER, bestCol);
+				if (alpha >= beta)
+				{
+					if (HTT && best && depth > no_HTT_depth)
+						((HeuristicTransTable*)HTT)[board.moveCount].store(board.hash, bestCol, (float)best, 0, depth, ENTRY_FLAG_EXACT);
+					return (SolveResult)TT[board.moveCount].store(board.hash, depth, best, best ? ENTRY_FLAG_EXACT : ENTRY_FLAG_LOWER, bestCol);
+				}
 			}
 		}
 	}
 
 	// Before returning it always saves the position in the TT
-
-	return (SolveResult)TT[board.moveCount].store(board.hash, depth, best, (best <= alpha0) ? ENTRY_FLAG_UPPER : ENTRY_FLAG_EXACT, bestCol);
+	if (HTT && best && depth > no_HTT_depth)
+		((HeuristicTransTable*)HTT)[board.moveCount].store(board.hash, bestCol, (float)best, 0, depth, ENTRY_FLAG_EXACT);
+	return (SolveResult)TT[board.moveCount].store(board.hash, depth, best, (best <= alpha0 && !best) ? ENTRY_FLAG_UPPER : ENTRY_FLAG_EXACT, bestCol);
 }
 
 // Solves the given board position up to a certain depth.
@@ -194,7 +205,7 @@ SolveResult solveBoard(const Board& initialBoard, unsigned char depth, TransTabl
 		if (!usingTT[d].is_init())
 			usingTT[d].init();
 
-	return exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, TT);
+	return exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, TT, nullptr, 0, nullptr);
 }
 
 // Same as the previous one but assumes validity checks have been done.
@@ -216,7 +227,7 @@ SolveResult noChecksSolveBoard(const Board& initialBoard, unsigned char depth, T
 		if (!usingTT[d].is_init())
 			usingTT[d].init();
 
-	return exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, usingTT);
+	return exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, usingTT, nullptr, 0, nullptr);
 }
 
 // If the position is stored on the transposition table it retrieves the best column.
@@ -269,15 +280,15 @@ char* findBestPath(const Board& board, SolveResult WhoWins, TransTable* givenTT,
 		switch (WhoWins)
 		{
 		case CURRENT_PLAYER_WIN:
-			result = exactTree(b, DRAW, CURRENT_PLAYER_WIN, depth, givenTT, stop);
+			result = exactTree(b, DRAW, CURRENT_PLAYER_WIN, depth, givenTT, nullptr, 0, stop);
 			break;
 
 		case OTHER_PLAYER_WIN:
-			result = exactTree(b, OTHER_PLAYER_WIN, DRAW, depth, givenTT, stop);
+			result = exactTree(b, OTHER_PLAYER_WIN, DRAW, depth, givenTT, nullptr, 0, stop);
 			break;
 
 		case DRAW:
-			result = exactTree(b, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, givenTT, stop);
+			result = exactTree(b, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, givenTT, nullptr, 0, stop);
 			break;
 
 		default:

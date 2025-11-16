@@ -63,7 +63,7 @@ static inline float heuristic(Board board, unsigned char depth, const HeuristicD
 	// Generates a tree under the position to check for wins or losses
 	// This deepens the heuristic tree making the evaluation fail safe
 
-	if (SolveResult deepSolve = exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, DATA.TT, DATA.STOP))
+	if (SolveResult deepSolve = exactTree(board, OTHER_PLAYER_WIN, CURRENT_PLAYER_WIN, depth, DATA.TT, nullptr, 0, DATA.STOP))
 		return (float)deepSolve;
 
 	// Here we flip the others board to represent all the possible 
@@ -250,12 +250,17 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 	HTTEntry* storedData = DATA.HTT[board.moveCount].storedBoard(board.hash);
 	if (storedData)
 	{
+		// Copies move order stored
+		for (int i = 0; i < 8; ++i)
+			order[i] = storedData->order[i];
+
+		// Checks the evaluation
 		float score = storedData->eval;
 
 		if (score == 1.f || score == -1.f)
 			return score;
 
-		else if (storedData->heuDepth >= depth)
+		else if (storedData->heuDepth >= depth && storedData->bitDepth + storedData->heuDepth >= depth + DATA.EXACT_TAIL)
 			switch (storedData->flag)
 			{
 			case ENTRY_FLAG_EXACT: // Exact value known
@@ -273,16 +278,8 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 			}
 
 		// Tree cutoff, returns heuristic
-
 		if (!depth)
 			return heuristic(board, DATA.EXACT_TAIL, DATA);
-
-
-        // Copies move order stored
-
-		if (storedData->heuDepth)
-			for (int i = 0; i < 8; ++i)
-				order[i] = storedData->order[i];
 	}
 	
 	// If is does not have stored data of the position it means it is a first encounter
@@ -291,7 +288,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 	// It is also important to order the nodes if the first encounter was of a diffrent
 	// node ordering standard than now
 	
-	if (!storedData || !storedData->heuDepth || (storedData->heuDepth <= DATA.ORDERING_DEPTH && depth > DATA.ORDERING_DEPTH))
+	if (!storedData || (storedData->heuDepth <= DATA.ORDERING_DEPTH && depth > DATA.ORDERING_DEPTH))
 	{
 		// If the depth is high enough it will make a small tree to order moves 
 		// It also looks for forced wins or lossses, if it finds one it returns it.
@@ -310,6 +307,11 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 
 		else
 		{
+			// It orders the moves from highest column to lowest column.
+			// Leaving invalid moves at the end.
+
+			orderByHeight(board.heights, order);
+
 			// Tree cutoff, returns heuristic.
 
 			if (!depth)
@@ -318,11 +320,6 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 				KILL_TEST;
 				return DATA.HTT[board.moveCount].store(board.hash, order, eval, depth, DATA.EXACT_TAIL, ENTRY_FLAG_EXACT);;
 			}
-
-			// It orders the moves from highest column to lowest column.
-			// Leaving invalid moves at the end.
-
-			orderByHeight(board.heights, order);
 
 			// Checks if a move is winning for the current player.
 			// Wins are checked here so there is no need to check them anywhere else.

@@ -144,12 +144,16 @@ bool Thread::suspend()
 // Hard kill (strongly discouraged). Prefer cooperative stop.
 // It's better if you enter a variable in the thread to call stop.
 
-bool Thread::terminate() {
+bool Thread::terminate() 
+{
     if (!thread_handle_) 
         return false;
 
+#pragma warning(push)
+#pragma warning(disable: 6258)
     if (!TerminateThread((HANDLE)thread_handle_, 0UL)) 
         return false;
+#pragma warning(pop)
 
     last_exit_code_ = THREAD_TERMINATED;
     exit_code_valid_ = true;
@@ -222,14 +226,14 @@ bool Thread::set_priority(const PriorityLevel level) const
 
 bool Thread::set_affinity(unsigned long long mask) const
 {
-    if (!thread_handle_) 
+    if (!thread_handle_ || mask == 0ULL) 
         return false;
 
     DWORD_PTR pm = 0, sm = 0;
     if (!GetProcessAffinityMask(GetCurrentProcess(), &pm, &sm)) 
         return false;
 
-    if ((mask == 0) || ((mask & pm) != mask)) 
+    if ((mask & pm) != mask) 
         return false;
 
     return SetThreadAffinityMask((HANDLE)thread_handle_, (DWORD_PTR)mask) != 0;

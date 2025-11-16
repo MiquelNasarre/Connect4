@@ -11,14 +11,12 @@ a given depth, its return values are either win, loss or draw.
 -------------------------------------------------------------------------------------------------------
 */
 
-#define B_SOLVER
-
 // This is the main function of the bit-solver.
 // It solves a given position up to a certain depth, returns win, loss or draw.
 // Uses transposition tables, with best move ordering and alpha beta pruning.
 // Use of this function in particular is only for direct interaction by engines.
 // For user-end use is safer to use the other functions.
-extern inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth, TransTable* TT, bool* stop = nullptr);
+extern inline SolveResult exactTree(Board& board, SolveResult alpha, SolveResult beta, unsigned char depth, TransTable* TT, void* HTT, unsigned char no_HTT_depth, bool* stop);
 
 // Returns the score of the board found after generating a tree.
 // The tree uses alpha-beta pruning and its depth moves deep.

@@ -18,12 +18,14 @@ Macros for HTTs
 -------------------------------------------------------------------------------------------------------
 */
 
+#define _HEURISTIC_TT
+
 // Number of entries that will be created by defaul in a transposition table.
 // 
 // The solver generates a TT for every moveCount that it analises. That way it avoids 
 // overriding hot boards of different depths. But that comes at the cost of a lor of 
 // memory usage. 
-// The number below seems to be the perfect balance between mantaining hot paths 
+// The number below seems to be the perfect balance between maintaining hot paths 
 // avaliable on the TT and not making it too big for the program to search for
 // different entries. Modify with caution.
 
@@ -67,6 +69,11 @@ struct HTTEntry
         this->order[5] = order[5];
         this->order[6] = order[6];
         this->order[7] = order[7];
+    }
+    HTTEntry(uint64_t key, uint8_t bestCol, float eval, uint8_t heuDepth, uint8_t bitDepth, uint8_t flag)
+        : key{ key }, eval{ eval }, heuDepth{ heuDepth }, bitDepth{ bitDepth }, flag{ flag }
+    {
+        this->order[0] = bestCol;
     }
 };
 
@@ -157,9 +164,21 @@ public:
     {
         HTTEntry* e = probe(key);
 
-        // If keys are different or you are deeper
-        if (heuDepth >= e->heuDepth || e->key != key)
+        // If keys are different or you are deeper and no victory found
+        if (e->key != key || (heuDepth >= e->heuDepth && e->eval != -1.f && e->eval != 1.f) || eval == 1.f || eval == -1.f)
             *e = HTTEntry(key, order, eval, heuDepth, bitDepth, flag);
+
+        return eval;
+    }
+
+    // This function receives a TTentry and stores it inside te transposition table.
+    inline float store(uint64_t key, uint8_t bestCol, float eval, uint8_t heuDepth, uint8_t bitDepth, uint8_t flag) const
+    {
+        HTTEntry* e = probe(key);
+
+        // If keys are different or you are deeper and no victory found
+        if (e->key != key || (heuDepth >= e->heuDepth && e->eval != -1.f && e->eval != 1.f) || eval == 1.f || eval == -1.f)
+            *e = HTTEntry(key, bestCol, eval, heuDepth, bitDepth, flag);
 
         return eval;
     }

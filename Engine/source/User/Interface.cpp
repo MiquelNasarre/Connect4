@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Creates an engine object and starts a game played in the console.
+// The engine will think the amount of time specified.
+
 void playAgainstEngine(float engine_time_per_move, Connect4 position, unsigned char play_as, bool clear_console)
 {
 	Timer timer;
@@ -106,6 +109,9 @@ void playAgainstEngine(float engine_time_per_move, Connect4 position, unsigned c
 		printf("\nThe game has ended in a draw\n");
 }
 
+// Creates an engine object and starts a game with itself played in the console.
+// The engine will think the amount of time specified.
+
 char engineAgainstEngine(float engine_time_per_move, Connect4 position, bool clear_console)
 {
 	Timer timer;
@@ -123,6 +129,9 @@ char engineAgainstEngine(float engine_time_per_move, Connect4 position, bool cle
 		timer.reset();
 		PositionEval eval = engine.evaluate_for(engine_time_per_move);
 		float time = timer.check();
+
+		if (eval.flag == INVALID_BOARD)
+			printf("Invalid buard received!!");
 
 		if (clear_console)
 			system("cls");

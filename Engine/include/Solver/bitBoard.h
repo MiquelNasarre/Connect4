@@ -2,7 +2,7 @@
 #include "zobrist.h"
 #include "mask.h"
 
-#define BIT_BOARD
+#define _BIT_BOARD
 
 /* CONNECT4 BITBOARD HEADER FILE
 -------------------------------------------------------------------------------------------------------

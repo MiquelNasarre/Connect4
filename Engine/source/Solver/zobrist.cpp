@@ -1,5 +1,14 @@
 #include "zobrist.h"
 
+// Helper class to initialize Zobrist upon start of the process.
+
+class _initializer_helper
+{
+    static _initializer_helper helper;
+    _initializer_helper() { init_zobrist(); }
+};
+_initializer_helper _initializer_helper::helper;
+
 // extern Definitions for zobrist.h.
 
 uint64_t Z_PIECE[2][64] = { 0ULL };
