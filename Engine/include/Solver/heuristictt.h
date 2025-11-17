@@ -1,7 +1,7 @@
 #pragma once
-#include <cstdint>
+#include <stdint.h>
 #include <stdlib.h>
-#include <cstring>
+#include <string.h>
 
 /* HEURISTIC TRANSPOSITION TABLE HEADER FILE
 -------------------------------------------------------------------------------------------------------
@@ -47,7 +47,7 @@ Transposition Table and its Entries defintion
 
 // This structure defines an entry of the transposition table, storing the key or board hash
 // and other values the minimax algorith will use to avoid unnecesary computation.
-struct HTTEntry 
+struct HTTEntry
 {
     uint64_t key;           // full key
     uint8_t  order[8];      // stores the moves ordered through the evaluation
@@ -57,23 +57,32 @@ struct HTTEntry
     uint8_t  flag;          // 0=EXACT, 1=LOWER, 2=UPPER
     // pad 1 byte
 
-    HTTEntry() = default;
-    HTTEntry(uint64_t key, uint8_t order[8], float eval, uint8_t heuDepth, uint8_t bitDepth, uint8_t flag)
-        : key{ key }, eval{ eval }, heuDepth{ heuDepth }, bitDepth{ bitDepth }, flag{ flag }
+    inline void set(const uint64_t _key, const uint8_t _order[8], const float _eval, const uint8_t _heuDepth, const uint8_t _bitDepth, const uint8_t _flag)
     {
-        this->order[0] = order[0];
-        this->order[1] = order[1];
-        this->order[2] = order[2];
-        this->order[3] = order[3];
-        this->order[4] = order[4];
-        this->order[5] = order[5];
-        this->order[6] = order[6];
-        this->order[7] = order[7];
+        eval = _eval;
+        heuDepth = _heuDepth;
+        bitDepth = _bitDepth;
+        flag = _flag;
+        order[0] = _order[0];
+        order[1] = _order[1];
+        order[2] = _order[2];
+        order[3] = _order[3];
+        order[4] = _order[4];
+        order[5] = _order[5];
+        order[6] = _order[6];
+        order[7] = _order[7];
+
+        key = _key;
     }
-    HTTEntry(uint64_t key, uint8_t bestCol, float eval, uint8_t heuDepth, uint8_t bitDepth, uint8_t flag)
-        : key{ key }, eval{ eval }, heuDepth{ heuDepth }, bitDepth{ bitDepth }, flag{ flag }
+    inline void set(const uint64_t _key, const uint8_t _bestCol, const float _eval, const uint8_t _heuDepth, const uint8_t _bitDepth, const uint8_t _flag)
     {
-        this->order[0] = bestCol;
+        eval = _eval;
+        heuDepth = _heuDepth;
+        bitDepth = _bitDepth;
+        flag = _flag;
+        order[0] = _bestCol;
+        order[1] = 255; // for debugging (if ever analized will raise error)
+        key = _key;
     }
 };
 
@@ -166,7 +175,7 @@ public:
 
         // If keys are different or you are deeper and no victory found
         if (e->key != key || (heuDepth >= e->heuDepth && e->eval != -1.f && e->eval != 1.f) || eval == 1.f || eval == -1.f)
-            *e = HTTEntry(key, order, eval, heuDepth, bitDepth, flag);
+            e->set(key, order, eval, heuDepth, bitDepth, flag);
 
         return eval;
     }
@@ -178,7 +187,7 @@ public:
 
         // If keys are different or you are deeper and no victory found
         if (e->key != key || (heuDepth >= e->heuDepth && e->eval != -1.f && e->eval != 1.f) || eval == 1.f || eval == -1.f)
-            *e = HTTEntry(key, bestCol, eval, heuDepth, bitDepth, flag);
+            e->set(key, bestCol, eval, heuDepth, bitDepth, flag);
 
         return eval;
     }

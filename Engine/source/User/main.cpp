@@ -2,6 +2,7 @@
 #include "testBoards.h"
 #include "Trainer.h"
 #include "Engine_NN.h"
+#include "bitSolver.h"
 
 #include "rng.h"
 #include <cmath>

@@ -46,14 +46,17 @@ struct Connect4
 #endif
 };
 
-// Struct that will be return after calling for a board evaluation.
+// Struct that will be returned after calling for a board evaluation.
 // Contains all the important data of the analyzed position.
 struct PositionEval
 {
-	float eval = 0.f;			// Value between -1 and 1, evaluation for the current player
-	unsigned char column = 0u;	// Best column to throw at the given position
-	unsigned char depth = 0u;	// Depth at which the position was evalued 
-								// If the position is win/loss, depth is the distance with perfect play
+	// Value between -1 and 1, evaluation for the current player.
+	float eval = 0.f;
+	// Best column to throw at the given position.
+	unsigned char column = 0u;
+	// Depth of the received evaluation. If the position is win/loss, depth is the 
+	// distance with perfect play. If this distance is unknown depth will be 255.
+	unsigned char depth = 0u;
 
 	// Reflects the state of the positon, invalid board means the board data is not being stored.
 	enum EvalFlag : char

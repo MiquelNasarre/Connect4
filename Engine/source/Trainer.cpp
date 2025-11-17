@@ -1,5 +1,6 @@
 #include "Trainer.h"
 
+#ifdef _TRAINING
 #include "heuristicSolver.h"
 #include "Engine.h"
 #include "Thread.h"
@@ -9,7 +10,6 @@
 #include <stdlib.h>
 #include <cmath>
 
-#ifdef _TRAINING
 /*
 -------------------------------------------------------------------------------------------------------
 Arbitratry Training Values
@@ -26,7 +26,7 @@ Arbitratry Training Values
 
 // ELO tournament
 #define ARBITRARY_INITIAL_ELO					1000.f
-#define DEFAULT_K_FACTOR						32.f
+#define DEFAULT_K_FACTOR						16.f
 #define DEFAULT_MATCH_ROUNDS					4
 #define DEFAULT_GAMES_PER_MATCH					1
 #define ARBITRARY_ELO_DIV						2.f

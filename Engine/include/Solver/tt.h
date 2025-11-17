@@ -1,7 +1,7 @@
 #pragma once
-#include <cstdint>
+#include <stdint.h>
 #include <stdlib.h>
-#include <cstring>
+#include <string.h>
 
 /* TRANSPOSITION TABLE HEADER FILE 
 -------------------------------------------------------------------------------------------------------
@@ -54,6 +54,15 @@ struct TTEntry {
     uint8_t  flag;          // 0=EXACT, 1=LOWER, 2=UPPER
     uint8_t  bestCol;       // If existing stores the best move (if not =255)
     // pad 4 bytes
+
+    inline void set(uint64_t _key, uint8_t _depth, int8_t _score, uint8_t _flag, uint8_t _bestCol)
+    {
+        score = _score;
+        depth = _depth;
+        flag = _flag;
+        bestCol = _bestCol;
+        key = _key;
+    }
 };
 
 // This structure defines our tranposition table, it stores an array of 2^n entries.
@@ -146,7 +155,7 @@ public:
         
         // If keys are different or you are deeper
         if (depth >= e->depth || e->key != key)
-            *e = TTEntry{ key, depth, score, flag, bestCol };
+            e->set(key, depth, score, flag, bestCol);
 
         return score;
     }
