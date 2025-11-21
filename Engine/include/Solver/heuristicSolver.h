@@ -33,7 +33,7 @@ struct SolveEval
 
 #define POINT_DISTANCE 0x1.0p-6f // 1/64 in hexadecimal floating-point
 
-#define DEFAULT_TAIL_DEPTH		8
+#define DEFAULT_TAIL_DEPTH		4
 
 #define WEIGHT_FAVORABLES		(1.f * POINT_DISTANCE)
 #define WEIGHT_POSSIBLES		(2.f * POINT_DISTANCE)

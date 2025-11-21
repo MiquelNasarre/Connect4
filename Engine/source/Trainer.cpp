@@ -20,14 +20,14 @@ Arbitratry Training Values
 #define MOMENTUM								0.85f
 #define DEFAULT_WEIGHT_DECAY					0.01f
 #define ARBITRARY_MAX_RANDOM_MOVES				2
-#define ARBITRARY_TIME_DEVIATION				0.50f // 1.50f
+#define ARBITRARY_TIME_DEVIATION				0.10f // 1.50f
 #define ARBITRARY_MIN_TIME_PER_MOVE				0.05f
 #define DEFAULT_INIT_DEVIATION					sqrtf(2.f/INPUT_DIM)
 
 // ELO tournament
 #define ARBITRARY_INITIAL_ELO					1000.f
 #define DEFAULT_K_FACTOR						16.f
-#define DEFAULT_MATCH_ROUNDS					4
+#define DEFAULT_MATCH_ROUNDS					6
 #define DEFAULT_GAMES_PER_MATCH					1
 #define ARBITRARY_ELO_DIV						2.f
 
@@ -221,8 +221,8 @@ void Trainer::elo_games_tournament(NeuralNetwork** NNs, float* scores, unsigned 
 {
 		printf("\nTOURNAMENT BEGINS\n");
 		printf("PLAYERS %u, ROUNDS %u, MATCHES %u, GAMES %u\n", n_players, match_rounds, match_rounds * n_players / 2, match_rounds * n_players / 2 * games_per_match);
-		printf("Average time per game %.2fs\n", ARBITRARY_TIME_DEVIATION * 32.f);
-		printf("Expected Tournament Time %.2fs\n", ARBITRARY_TIME_DEVIATION * 32.f * match_rounds * n_players / 2 * games_per_match);
+		printf("Average time per game %.2fs\n", ARBITRARY_TIME_DEVIATION * 26.f);
+		printf("Expected Tournament Time %.2fs\n", ARBITRARY_TIME_DEVIATION * 26.f * match_rounds * n_players / 2 * games_per_match);
 
 		Thread arena[2] = { Thread(), Thread() };
 
@@ -266,14 +266,14 @@ void Trainer::elo_games_tournament(NeuralNetwork** NNs, float* scores, unsigned 
 					arena[0].set_priority(Thread::PRIORITY_ABOVE_NORMAL);
 					arena[0].set_name(L"Game %u.1: Player #%02u vs Player #%02u", game + 1, p1, p2);
 				} else throw("ERROR: Unable to start game thread");
-				
+				arena[0].join();
 				if (arena[1].start(&threaded_match, time_per_move, see_time_left, initial_board, player2, player1, &game_result2))
 				{
 					arena[1].set_priority(Thread::PRIORITY_ABOVE_NORMAL);
 					arena[1].set_name(L"Game %02u.2: Player #%u vs Player #%02u", game + 1, p2, p1);
 				} else throw("ERROR: Unable to start game thread");
 
-				arena[0].join(), arena[1].join();
+				 arena[1].join();
 
 				float g1 = compute_elo_diff(score1, score2, game_result1, DEFAULT_K_FACTOR);
 				float g2 = compute_elo_diff(score2, score1, game_result2, DEFAULT_K_FACTOR);

@@ -248,20 +248,25 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 	unsigned char order[8] = DEFAULT_MOVE_ORDER;
 
 	HTTEntry* storedData = DATA.HTT[board.moveCount].storedBoard(board.hash);
+	HTTEntry aux;
+
 	if (storedData)
 	{
-		// Copies move order stored
-		for (int i = 0; i < 8; ++i)
-			order[i] = storedData->order[i];
+		// Do a hard copy of the entry to avoid collisions.
+		storedData->lock();
+		memcpy(&aux, storedData, sizeof(HTTEntry));
+		storedData->unlock();
 
 		// Checks the evaluation
-		float score = storedData->eval;
+		float score = aux.eval;
 
+		// If the position is solved return
 		if (score == 1.f || score == -1.f)
 			return score;
 
-		else if (storedData->heuDepth >= depth && storedData->bitDepth + storedData->heuDepth >= depth + DATA.EXACT_TAIL)
-			switch (storedData->flag)
+		// If depths are better or equel evaluation is meaningful
+		if (aux.heuDepth >= depth && aux.bitDepth + aux.heuDepth >= depth + DATA.EXACT_TAIL)
+			switch (aux.flag)
 			{
 			case ENTRY_FLAG_EXACT: // Exact value known
 				return score;
@@ -280,6 +285,10 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 		// Tree cutoff, returns heuristic
 		if (!depth)
 			return heuristic(board, DATA.EXACT_TAIL, DATA);
+
+		// Copies move order stored
+		for (int i = 0; i < 8; ++i)
+			order[i] = aux.order[i];
 	}
 	
 	// If is does not have stored data of the position it means it is a first encounter
@@ -288,7 +297,7 @@ inline float heuristicTree(Board& board, float alpha, float beta, unsigned char 
 	// It is also important to order the nodes if the first encounter was of a diffrent
 	// node ordering standard than now
 	
-	if (!storedData || (storedData->heuDepth <= DATA.ORDERING_DEPTH && depth > DATA.ORDERING_DEPTH))
+	if (!storedData || (aux.heuDepth <= DATA.ORDERING_DEPTH && depth > DATA.ORDERING_DEPTH))
 	{
 		// If the depth is high enough it will make a small tree to order moves 
 		// It also looks for forced wins or lossses, if it finds one it returns it.

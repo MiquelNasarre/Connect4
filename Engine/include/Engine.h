@@ -124,13 +124,13 @@ public:
 	// Constructor, it calls the main loop to start analyzing the position.
 	// If no position is provided it will default to initial position. If it
 	// started suspended, resume needs to be called to start evaluating.
-	EngineConnect4(const Connect4* Position = nullptr, const char* nn_weights_file = nullptr, bool start_suspended = false);
+	EngineConnect4(const Connect4* Position = nullptr, const char* nn_weights_file = "scheduler", bool start_suspended = false);
 
 #ifdef _BIT_BOARD
 	// Constructor, it calls the main loop to start analyzing the board.
 	// If no board is provided it will default to initial position. If it
 	// started suspended, resume needs to be called to start evaluating.
-	EngineConnect4(const Board* board, const char* nn_weights_file = nullptr, bool start_suspended = false);
+	EngineConnect4(const Board* board, const char* nn_weights_file = "scheduler", bool start_suspended = false);
 
 #ifdef _NEURAL_NETWORK
 	// Constructor, it calls the main loop to start analyzing the board.
@@ -199,11 +199,11 @@ User end functions
 	// Returns a Board struct copy of the current position under evaluation.
 	Board get_current_bitBoard() const;
 #endif
-#ifdef _HEURISTIC_TT
+#if defined(_HEURISTIC_TT) & defined(_BIT_BOARD)
 	// Returns the HTTEntry* to the transposition table for the specified board.
 	HTTEntry* get_entry(const Board* board) const;
 #endif
-#ifdef _EXACT_TT
+#if defined(_EXACT_TT) & defined(_BIT_BOARD)
 	// Returns the TTEntry* to the transposition table for the specified board.
 	TTEntry* get_exact_entry(const Board* board) const;
 #endif

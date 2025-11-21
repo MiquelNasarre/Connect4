@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <atomic>
 
 /* HEURISTIC TRANSPOSITION TABLE HEADER FILE
 -------------------------------------------------------------------------------------------------------
@@ -44,9 +45,10 @@ Macros for HTTs
 Transposition Table and its Entries defintion
 -------------------------------------------------------------------------------------------------------
 */
-
-// This structure defines an entry of the transposition table, storing the key or board hash
-// and other values the minimax algorith will use to avoid unnecesary computation.
+#include <cstdio>
+// This structure defines an entry of the transposition table, stores the current information known
+// about a board, used for referencing while generating trees and for user evaluations. The board is 
+// encoded as a hash value and it saves depths, best move order, and current evaluation.
 struct HTTEntry
 {
     uint64_t key;           // full key
@@ -55,10 +57,23 @@ struct HTTEntry
     uint8_t  heuDepth;      // remaining heuristic depth stored
     uint8_t  bitDepth;      // exact tree depth stored
     uint8_t  flag;          // 0=EXACT, 1=LOWER, 2=UPPER
-    // pad 1 byte
+private:
+    std::atomic_flag _lock; // To lock the entry while writing/reading
+public:
+
+    inline void lock() noexcept
+    {
+        while (_lock.test_and_set(std::memory_order_acquire)) { /* busy waiting */ }
+    }
+    inline void unlock() noexcept
+    {
+        _lock.clear(std::memory_order_release);
+    }
 
     inline void set(const uint64_t _key, const uint8_t _order[8], const float _eval, const uint8_t _heuDepth, const uint8_t _bitDepth, const uint8_t _flag)
     {
+        lock();
+
         eval = _eval;
         heuDepth = _heuDepth;
         bitDepth = _bitDepth;
@@ -71,11 +86,14 @@ struct HTTEntry
         order[5] = _order[5];
         order[6] = _order[6];
         order[7] = _order[7];
-
         key = _key;
+
+        unlock();
     }
     inline void set(const uint64_t _key, const uint8_t _bestCol, const float _eval, const uint8_t _heuDepth, const uint8_t _bitDepth, const uint8_t _flag)
     {
+        lock();
+
         eval = _eval;
         heuDepth = _heuDepth;
         bitDepth = _bitDepth;
@@ -83,6 +101,8 @@ struct HTTEntry
         order[0] = _bestCol;
         order[1] = 255; // for debugging (if ever analized will raise error)
         key = _key;
+
+        unlock();
     }
 };
 

@@ -13,8 +13,8 @@
 #define CALL_SUSPENDERS			1
 
 #define MAINLOOP_WAIT_TIME_MS	5UL
-#define START_DEPTH_H			3
-#define START_DEPTH_E			13
+#define START_DEPTH_H			6
+#define START_DEPTH_E			12
 
 #define DEFAULT_DEADLINE		0.0f
 #define DEFAULT_CONSERVATISM	1.00f
@@ -305,6 +305,40 @@ Static main loop worker functions
 -------------------------------------------------------------------------------------------------------
 */
 
+// If we find moves that are loosing in the current board we want to make sure this moves are not 
+// listed first on its entry.Since the exactTree overrides the HTT this information will go through, 
+// but the delay might make the information not arrive on time, this function prevents that.
+static inline void check_for_loosing_moves(Board board, TransTable* TT, HTTEntry* e)
+{
+	if (e->eval != -1.f && e->eval != 1.f)
+	{
+		e->lock();
+		for (unsigned column = 0; column < 8; column++)
+		{
+			if (!canPlay(board, column))
+				continue;
+
+			playMove(board, column);
+			TTEntry* sons_entry = TT[board.moveCount].storedBoard(board.hash);
+			undoMove(board, column);
+
+			if (sons_entry && sons_entry->score == CURRENT_PLAYER_WIN)
+				for (unsigned idx = 0; idx < 7; idx++)
+				{
+					if (!canPlay(board, e->order[idx + 1]))
+						break;
+
+					if (e->order[idx] == column)
+					{
+						e->order[idx] = e->order[idx + 1];
+						e->order[idx + 1] = column;
+					}
+				}
+		}
+		e->unlock();
+	}
+}
+
 // Heuristic Tree threading helper: When called runs until it is called to stop or until it finds a
 // solution for the board. Increasing the depth one step at a time from the specified starting depth.
 static inline void main_loop_worker_heuristicSolver(Thread* self_thread, DATA* data, bool* busy, bool* kill_exact, bool* STOP)
@@ -341,42 +375,13 @@ static inline void main_loop_worker_heuristicSolver(Thread* self_thread, DATA* d
 		// We check what data of the actual position we have on storage.
 		stored_data = H_DATA.HTT[board.moveCount].storedBoard(board.hash);
 
-		// If we find moves that are losing in the current position we want to make sure
-		// this moves are not listed first on the entry so that they do not get selected.
-		// Since the exactTree overrides the HTT this information will go through, 
-		// but the delay might make the information not arrive on time and therefore
-		// make the engine return a known losing move.
-
-		for (unsigned column = 0; column < 8; column++)
-		{
-			if (!canPlay(board, column))
-				continue;
-
-			playMove(board, column);
-			TTEntry* sons_entry = H_DATA.TT[board.moveCount].storedBoard(board.hash);
-			undoMove(board, column);
-
-			if (sons_entry && sons_entry->score == CURRENT_PLAYER_WIN)
-				for (unsigned idx = 0; idx < 7; idx++)
-				{
-					if (!canPlay(board, stored_data->order[idx + 1]))
-						break;
-
-					if (stored_data->order[idx] == column)
-					{
-						stored_data->order[idx] = stored_data->order[idx + 1];
-						stored_data->order[idx + 1] = column;
-					}
-				}
-		}
+		// Make sure loosing moves are not first
+		check_for_loosing_moves(board, data->H_DATA.TT, stored_data);
 
 	} --data->HEURISTIC_DEPTH; // To keep depth consistent, oops!
 
 	if (*STOP)
 		goto end;
-
-	if (!stored_data)
-		throw ("No data on storage after for loop");
 
 	// If a solution was found in the current position the best path will be solved.
 	if (stored_data->eval == 1.f || stored_data->eval == -1.f)
@@ -446,37 +451,9 @@ static inline void main_loop_worker_exactSolver(Thread* self_thread, DATA* data,
 		if (*STOP)
 			goto end;
 
-		// If we find moves that are losing in the current position we want to make sure
-		// this moves are not listed first on the entry so that they do not get selected.
-		// Since the exactTree overrides the HTT this information will go through, 
-		// but the delay might make the information not arrive on time and therefore
-		// make the engine return a known losing move. This code prevents that.
-
+		// Make sure loosing moves are not listed first
 		if (HTTEntry* e = data->H_DATA.HTT[board.moveCount].storedBoard(board.hash))
-		{
-			for (unsigned column = 0; column < 8; column++)
-			{
-				if (!canPlay(board, column))
-					continue;
-
-				playMove(board, column);
-				TTEntry* sons_entry = data->H_DATA.TT[board.moveCount].storedBoard(board.hash);
-				undoMove(board, column);
-
-				if (sons_entry && sons_entry->score == CURRENT_PLAYER_WIN)
-					for (unsigned idx = 0; idx < 7; idx++)
-					{
-						if (!canPlay(board, e->order[idx + 1]))
-							break;
-
-						if (e->order[idx] == column)
-						{
-							e->order[idx] = e->order[idx + 1];
-							e->order[idx + 1] = column;
-						}
-					}
-			}
-		}
+			check_for_loosing_moves(board, data->H_DATA.TT, e);
 
 		// We check what data of the actual position we have on storage.
 		stored_data = data->H_DATA.TT[board.moveCount].storedBoard(board.hash);
@@ -485,9 +462,6 @@ static inline void main_loop_worker_exactSolver(Thread* self_thread, DATA* data,
 
 	if (*STOP)
 		goto end;
-
-	if (!stored_data)
-		throw ("No data on storage after for loop");
 
 	// If a solution was found in the current position the best path will be solved.
 	if (stored_data->score != DRAW)

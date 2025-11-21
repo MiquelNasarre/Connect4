@@ -127,7 +127,7 @@ char engineAgainstEngine(float engine_time_per_move, Connect4 position, bool cle
 	while (!is_win(bitBoard.playerBitboard[0]) && !is_win(bitBoard.playerBitboard[1]) && bitBoard.moveCount < 64)
 	{
 		timer.reset();
-		PositionEval eval = engine.evaluate_for(engine_time_per_move);
+		PositionEval eval = engine.evaluate_for(engine_time_per_move, &bitBoard);
 		float time = timer.check();
 
 		if (eval.flag == INVALID_BOARD)
@@ -173,9 +173,7 @@ char engineAgainstEngine(float engine_time_per_move, Connect4 position, bool cle
 
 		playMove(bitBoard, eval.column);
 
-		engine.update_position(&bitBoard);
-		engine.get_current_position().console_fancy_print();
-
+		EngineConnect4::decodeBoard(bitBoard).console_fancy_print();
 	}
 
 	if (is_win(bitBoard.playerBitboard[0]))
